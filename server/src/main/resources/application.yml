@@ -1,0 +1,6 @@
+cita:
+  host: 'https://testnet.citahub.com'
+
+grpc:
+  server:
+    port: 9898

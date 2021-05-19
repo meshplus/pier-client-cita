@@ -1,30 +1,66 @@
 package com.dmlab.cita.server.service;
 
+import com.citahub.cita.abi.FunctionEncoder;
+import com.citahub.cita.abi.datatypes.DynamicArray;
+import com.citahub.cita.abi.datatypes.DynamicBytes;
+import com.citahub.cita.abi.datatypes.Function;
+import com.citahub.cita.abi.datatypes.Type;
+import com.citahub.cita.crypto.Credentials;
 import com.citahub.cita.protocol.CITAj;
+import com.citahub.cita.protocol.core.RemoteCall;
 import com.citahub.cita.protocol.core.methods.request.AppFilter;
-import com.citahub.cita.protocol.core.methods.response.AppVersion;
+import com.citahub.cita.protocol.core.methods.response.TransactionReceipt;
 import com.citahub.cita.protocol.http.HttpService;
+import com.citahub.cita.tx.RawTransactionManager;
+import com.citahub.cita.tx.TransactionManager;
 import com.dmlab.cita.server.config.CitaConfig;
+import com.dmlab.cita.server.contracts.Broker;
+import com.dmlab.cita.server.utils.CITAUtils;
+import com.dmlab.cita.server.utils.IBTPUtils;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.moandjiezana.toml.Toml;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
+import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.stereotype.Component;
 import pb.AppchainPluginGrpc.AppchainPluginImplBase;
 import pb.*;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.rmi.NoSuchObjectException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
+@GrpcService
+@Component
 @Slf4j
 public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
+    private static String TYPE = "cita";
     private CITAj client;
     private CitaConfig config;
+    private String pierId;
+    private int version;
+    private BigInteger chainId;
+
+    private static BlockingQueue<IBTP> eventC = new ArrayBlockingQueue<IBTP>(1024);
+    private Broker broker;
 
 
     @Override
     public void initialize(InitializeRequest request, StreamObserver<Empty> responseObserver) {
         String configPath = request.getConfigPath();
+        pierId = request.getPierId();
         try {
             Toml toml = new Toml().read(Files.newInputStream(Path.of(configPath, "cita.toml")));
             String addr = toml.getString("addr", "https://testnet.citahub.com");
@@ -33,7 +69,6 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             String key = toml.getString("key");
             Long minConfirm = toml.getLong("min_confirm");
             config = new CitaConfig(addr, name, contractAddress, key, minConfirm);
-            responseObserver.onNext(Empty.newBuilder().build());
         } catch (IOException e) {
             e.printStackTrace();
             responseObserver.onError(e);
@@ -41,12 +76,19 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         }
         client = CITAj.build(new HttpService(config.getAddr()));
         try {
-            AppVersion.Version version = client.getVersion().send().getVersion();
-            log.info("Cita version:{}", version.softwareVersion);
+            version = CITAUtils.getVersion(client);
+            chainId = CITAUtils.getChainId(client);
+            log.info("Cita version:{}, chainId:{}", version, chainId.intValue());
         } catch (IOException e) {
             e.printStackTrace();
             responseObserver.onError(e);
         }
+
+        TransactionManager citaTxManager = new RawTransactionManager(
+                client, Credentials.create(config.getPrivateKey()), 5, 3000);
+
+        broker = Broker.load(config.getContractAddress(), client, citaTxManager);
+
         responseObserver.onCompleted();
     }
 
@@ -62,12 +104,114 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void getIBTP(Empty request, StreamObserver<IBTP> responseObserver) {
-        super.getIBTP(request, responseObserver);
+
     }
 
     @Override
     public void submitIBTP(IBTP request, StreamObserver<SubmitIBTPResponse> responseObserver) {
-        super.submitIBTP(request, responseObserver);
+        SubmitIBTPResponse sir = SubmitIBTPResponse.getDefaultInstance();
+        payload payload = null;
+        content content = null;
+        try {
+            payload = pb.payload.parseFrom(request.getPayload());
+            content = pb.content.parseFrom(payload.getContent());
+        } catch (InvalidProtocolBufferException e) {
+            e.printStackTrace();
+            responseObserver.onError(e);
+            return;
+        }
+
+        if (IBTPUtils.category(request) == IBTP.Category.UNKNOWN) {
+            responseObserver.onError(new IllegalArgumentException("invalid ibtp category"));
+            return;
+        }
+
+        if (IBTPUtils.category(request) == IBTP.Category.RESPONSE && content.getFunc().equals("")) {
+            TransactionReceipt transactionReceipt = null;
+            try {
+                transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex());
+            } catch (Exception e) {
+                e.printStackTrace();
+                responseObserver.onError(e);
+                return;
+            }
+            boolean status = transactionReceipt.getStatus().equalsIgnoreCase("1");
+            if (!status) {
+                responseObserver.onError(new IllegalStateException("update index for ibtp failed" + request.getFrom() + "-" + request.getTo() + "-" + request.getIndex()));
+                return;
+            }
+            sir = sir.toBuilder().setStatus(true).build();
+            responseObserver.onNext(sir);
+            responseObserver.onCompleted();
+            return;
+        }
+
+        //TODO:need to handle abi encode error
+        ArrayList<DynamicBytes> dynamicBytesArrayList = new ArrayList<>();
+        content.getArgsList().forEach(arg -> {
+            dynamicBytesArrayList.add(new DynamicBytes(arg.toByteArray()));
+        });
+        Function func = new Function(
+                content.getFunc(),
+                Arrays.asList(new DynamicArray(dynamicBytesArrayList.toArray(new Type[]{}))),
+                Collections.emptyList()
+        );
+        String funcEncoder = FunctionEncoder.encode(func);
+
+        TransactionReceipt receipt = null;
+        try {
+            receipt = invokeInterchain(request.getFrom(), request.getIndex(), request.getTo(), IBTPUtils.category(request), funcEncoder.getBytes());
+        } catch (Exception e) {
+            e.printStackTrace();
+            responseObserver.onError(e);
+            return;
+        }
+
+        Broker.ThrowEventEventResponse throwEventEventResponse = null;
+        boolean status = receipt.getStatus().equalsIgnoreCase("1");
+        if (status) {
+            List<Broker.ThrowEventEventResponse> throwEventEvents = broker.getThrowEventEvents(receipt);
+            if (throwEventEvents.size() > 1 || throwEventEvents.isEmpty()) {
+                responseObserver.onError(new NoSuchObjectException("not found ThrowEventEvent"));
+                return;
+            }
+            throwEventEventResponse = throwEventEvents.get(0);
+        } else {
+            TransactionReceipt transactionReceipt = null;
+            try {
+                transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex());
+            } catch (Exception e) {
+                e.printStackTrace();
+                responseObserver.onError(e);
+                return;
+            }
+            status = transactionReceipt.getStatus().equalsIgnoreCase("1");
+            if (!status) {
+                responseObserver.onError(new IllegalStateException("invalid index for ibtp" + request.getFrom() + "-" + request.getTo() + "-" + request.getIndex()));
+                return;
+            }
+            sir = sir.toBuilder().setStatus(false).setMessage("InvokeInterchain tx execution failed").build();
+        }
+
+
+        if (IBTPUtils.category(request) == IBTP.Category.RESPONSE) {
+            responseObserver.onNext(sir);
+            responseObserver.onCompleted();
+            return;
+        }
+        byte[][] args = new byte[][]{};
+        List<byte[]> collect = Arrays.stream(throwEventEventResponse.argscb.split(",")).map(String::getBytes).collect(Collectors.toList());
+        IBTP callBack = null;
+        try {
+            callBack = generateCallBack(request, collect.toArray(args), sir.getStatus());
+        } catch (InvalidProtocolBufferException e) {
+            e.printStackTrace();
+            responseObserver.onError(e);
+            return;
+        }
+        sir = sir.toBuilder().setResult(callBack).build();
+        responseObserver.onNext(sir);
+        responseObserver.onCompleted();
     }
 
     @Override
@@ -113,8 +257,71 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void type(Empty request, StreamObserver<TypeResponse> responseObserver) {
-        TypeResponse reply = TypeResponse.newBuilder().setType("cita").build();
-        responseObserver.onNext(reply);
+        responseObserver.onNext(TypeResponse.newBuilder().setType(TYPE).build());
         responseObserver.onCompleted();
     }
+
+
+    public TransactionReceipt invokeInterchain(
+            String srcChainMethod, Long index, String destAddr, IBTP.Category category, byte[] bizCallData) throws Exception {
+        long currentHeight = client.appBlockNumber()
+                .send().getBlockNumber().longValue();
+        long validUntilBlock = currentHeight + 80;
+        String nonce = CITAUtils.getNonce();
+        RemoteCall<TransactionReceipt> transactionReceiptRemoteCall = broker.invokeInterchain(srcChainMethod, BigInteger.valueOf(index), destAddr, category == IBTP.Category.REQUEST
+                , bizCallData, BigInteger.ZERO, 1L, nonce, validUntilBlock, version, chainId, "");
+        Future<TransactionReceipt> transactionReceiptFuture = transactionReceiptRemoteCall.sendAsync();
+        return transactionReceiptFuture.get();
+    }
+
+    public TransactionReceipt invokeInterchainWithError(String from, Long index) throws Exception {
+        long currentHeight = client.appBlockNumber()
+                .send().getBlockNumber().longValue();
+        long validUntilBlock = currentHeight + 80;
+        String nonce = CITAUtils.getNonce();
+        RemoteCall<TransactionReceipt> transactionReceiptRemoteCall = broker.invokeIndexUpdateWithError(from, BigInteger.valueOf(index),
+                false, "", 1L, nonce, validUntilBlock, version, chainId, "");
+        Future<TransactionReceipt> transactionReceiptFuture = transactionReceiptRemoteCall.sendAsync();
+        return transactionReceiptFuture.get();
+    }
+
+
+    public IBTP generateCallBack(IBTP origin, byte[][] args, boolean status) throws InvalidProtocolBufferException {
+        payload payload = pb.payload.parseFrom(origin.getPayload());
+        content content = pb.content.parseFrom(payload.getContent());
+
+        IBTP.Type typ = IBTP.Type.RECEIPT_SUCCESS;
+        pb.content newContent = pb.content.newBuilder()
+                .setSrcContractId(content.getDstContractId())
+                .setDstContractId(content.getSrcContractId())
+                .build();
+        if (status) {
+            pb.content.Builder builder = newContent.toBuilder().setFunc(content.getCallback());
+            for (int i = 0; i < content.getArgsCbCount(); i++) {
+                builder = builder.setArgs(i, content.getArgsCb(i));
+            }
+            for (int i = 0; i < args.length; i++) {
+                builder = builder.setArgs(i, ByteString.copyFrom(args[i]));
+            }
+            newContent = builder.build();
+        } else {
+            typ = IBTP.Type.RECEIPT_FAILURE;
+            pb.content.Builder builder = newContent.toBuilder().setFunc(content.getRollback());
+            for (int i = 0; i < content.getArgsRbCount(); i++) {
+                builder = builder.setArgs(i, content.getArgsRb(i));
+            }
+            newContent = builder.build();
+        }
+        pb.payload newPayload = pb.payload.newBuilder().setContent(newContent.toByteString()).build();
+        return IBTP.newBuilder().setFrom(origin.getFrom())
+                .setTo(origin.getTo())
+                .setIndex(origin.getIndex())
+                .setType(typ)
+                .setTimestamp(System.currentTimeMillis())
+                .setProof(origin.getProof())
+                .setPayload(newPayload.toByteString())
+                .setVersion(origin.getVersion())
+                .build();
+    }
+
 }

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+APP_HOME=`dirname $0`
+
+java -jar $APP_HOME/server-0.0.1-SNAPSHOT.jar

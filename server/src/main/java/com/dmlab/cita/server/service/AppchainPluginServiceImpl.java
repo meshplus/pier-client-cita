@@ -8,8 +8,6 @@ import com.dmlab.cita.server.config.CitaConfig;
 import com.moandjiezana.toml.Toml;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
-import net.devh.boot.grpc.server.service.GrpcService;
-import org.springframework.stereotype.Component;
 import pb.AppchainPluginGrpc.AppchainPluginImplBase;
 import pb.*;
 
@@ -17,8 +15,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-@GrpcService
-@Component
 @Slf4j
 public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
@@ -37,6 +33,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             String key = toml.getString("key");
             Long minConfirm = toml.getLong("min_confirm");
             config = new CitaConfig(addr, name, contractAddress, key, minConfirm);
+            responseObserver.onNext(Empty.newBuilder().build());
         } catch (IOException e) {
             e.printStackTrace();
             responseObserver.onError(e);
@@ -116,6 +113,8 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void type(Empty request, StreamObserver<TypeResponse> responseObserver) {
-        super.type(request, responseObserver);
+        TypeResponse reply = TypeResponse.newBuilder().setType("cita").build();
+        responseObserver.onNext(reply);
+        responseObserver.onCompleted();
     }
 }

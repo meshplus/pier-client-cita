@@ -117,7 +117,18 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void getIBTP(Empty request, StreamObserver<IBTP> responseObserver) {
+        while (true) {
+            try {
+                IBTP ibtp = eventC.take();
+                responseObserver.onNext(ibtp);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                responseObserver.onError(e);
+                break;
+            }
+        }
 
+        responseObserver.onCompleted();
     }
 
     @Override
@@ -255,8 +266,8 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                     if (destchainid.equals(request.getTo()) && throwEventEventResponse.index.longValue() == request.getIdx()) {
                         try {
                             ibtp = IBTPUtils.convertFromEvent(throwEventEventResponse, pierId);
+                            responseObserver.onNext(ibtp);
                         } catch (Exception e) {
-                            e.printStackTrace();
                             e.printStackTrace();
                             responseObserver.onError(e);
                         }
@@ -270,7 +281,9 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
                 @Override
                 public void onComplete() {
-                    responseObserver.onNext(ibtp);
+                    if (ibtp == null) {
+                        responseObserver.onError(new Exception("no ibtp with to " + request.getTo() + " and index " + request.getIdx() + " found"));
+                    }
                     responseObserver.onCompleted();
                 }
             });

@@ -10,7 +10,6 @@ import com.citahub.cita.protocol.CITAj;
 import com.citahub.cita.protocol.core.DefaultBlockParameter;
 import com.citahub.cita.protocol.core.DefaultBlockParameterName;
 import com.citahub.cita.protocol.core.RemoteCall;
-import com.citahub.cita.protocol.core.methods.request.AppFilter;
 import com.citahub.cita.protocol.core.methods.response.TransactionReceipt;
 import com.citahub.cita.protocol.http.HttpService;
 import com.citahub.cita.tuples.generated.Tuple2;
@@ -44,7 +43,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @GrpcService
@@ -230,17 +228,82 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void getOutMessage(GetOutMessageRequest request, StreamObserver<IBTP> responseObserver) {
-        super.getOutMessage(request, responseObserver);
+        try {
+            BigInteger block = broker.getOutMessage(request.getTo(), BigInteger.valueOf(request.getIdx())).send();
+            Flowable<Broker.ThrowEventEventResponse> flowable = broker.throwEventEventFlowable(DefaultBlockParameter.valueOf(block), DefaultBlockParameter.valueOf(block));
+
+            flowable.subscribe(new Subscriber<Broker.ThrowEventEventResponse>() {
+                private IBTP ibtp = null;
+
+                @Override
+                public void onSubscribe(Subscription subscription) {
+                    subscription.request(Long.MAX_VALUE);
+                }
+
+                @Override
+                public void onNext(Broker.ThrowEventEventResponse throwEventEventResponse) {
+                    if (ibtp != null) {
+                        return;
+                    }
+
+                    String[] split = throwEventEventResponse.destDID.split(":");
+                    if (split.length != 4 || !"did".equals(split[0]) || "".equals(split[1]) || "".equals(split[2]) || "".equals(split[3])) {
+                        return;
+                    }
+
+                    String destchainid = String.join(":", split[0], split[1], split[2], ".");
+                    if (destchainid.equals(request.getTo()) && throwEventEventResponse.index.longValue() == request.getIdx()) {
+                        try {
+                            ibtp = IBTPUtils.convertFromEvent(throwEventEventResponse, pierId);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            e.printStackTrace();
+                            responseObserver.onError(e);
+                        }
+                    }
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                    responseObserver.onError(throwable);
+                }
+
+                @Override
+                public void onComplete() {
+                    responseObserver.onNext(ibtp);
+                    responseObserver.onCompleted();
+                }
+            });
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            responseObserver.onError(e);
+            return;
+        }
+
+        responseObserver.onCompleted();
     }
 
     @Override
     public void getInMessage(GetInMessageRequest request, StreamObserver<GetInMessageResponse> responseObserver) {
-        super.getInMessage(request, responseObserver);
+        BigInteger inBlock = null;
+        try {
+            inBlock = broker.getInMessage(request.getFrom(), BigInteger.valueOf(request.getIdx())).send();
+        } catch (Exception e) {
+            e.printStackTrace();
+            responseObserver.onError(e);
+            responseObserver.onCompleted();
+            return;
+        }
+        responseObserver.onNext(GetInMessageResponse.newBuilder().addResult(ByteString.copyFrom(inBlock.toByteArray())).build());
+        responseObserver.onCompleted();
     }
 
     @Override
     public void getInMeta(Empty request, StreamObserver<GetMetaResponse> responseObserver) {
-        super.getInMeta(request, responseObserver);
+        Future<Tuple2<List<String>, List<BigInteger>>> tuple2Future = broker.getInnerMeta().sendAsync();
+        getMeta(responseObserver, tuple2Future);
     }
 
     @Override

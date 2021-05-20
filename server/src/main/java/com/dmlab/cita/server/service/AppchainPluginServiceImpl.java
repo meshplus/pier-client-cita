@@ -7,10 +7,13 @@ import com.citahub.cita.abi.datatypes.Function;
 import com.citahub.cita.abi.datatypes.Type;
 import com.citahub.cita.crypto.Credentials;
 import com.citahub.cita.protocol.CITAj;
+import com.citahub.cita.protocol.core.DefaultBlockParameter;
 import com.citahub.cita.protocol.core.DefaultBlockParameterName;
 import com.citahub.cita.protocol.core.RemoteCall;
+import com.citahub.cita.protocol.core.methods.request.AppFilter;
 import com.citahub.cita.protocol.core.methods.response.TransactionReceipt;
 import com.citahub.cita.protocol.http.HttpService;
+import com.citahub.cita.tuples.generated.Tuple2;
 import com.citahub.cita.tx.RawTransactionManager;
 import com.citahub.cita.tx.TransactionManager;
 import com.dmlab.cita.server.config.CitaConfig;
@@ -25,6 +28,8 @@ import io.reactivex.Flowable;
 import io.reactivex.functions.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
 import org.springframework.stereotype.Component;
 import pb.AppchainPluginGrpc.AppchainPluginImplBase;
 import pb.*;
@@ -34,13 +39,12 @@ import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.rmi.NoSuchObjectException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @GrpcService
@@ -241,12 +245,34 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void getOutMeta(Empty request, StreamObserver<GetMetaResponse> responseObserver) {
-        super.getOutMeta(request, responseObserver);
+        Future<Tuple2<List<String>, List<BigInteger>>> tuple2Future = broker.getOuterMeta().sendAsync();
+        getMeta(responseObserver, tuple2Future);
     }
 
     @Override
     public void getCallbackMeta(Empty request, StreamObserver<GetMetaResponse> responseObserver) {
-        super.getCallbackMeta(request, responseObserver);
+        Future<Tuple2<List<String>, List<BigInteger>>> tuple2Future = broker.getCallbackMeta().sendAsync();
+        getMeta(responseObserver, tuple2Future);
+    }
+
+    private void getMeta(StreamObserver<GetMetaResponse> responseObserver, Future<Tuple2<List<String>, List<BigInteger>>> tuple2Future) {
+        Tuple2<List<String>, List<BigInteger>> listListTuple2 = null;
+        try {
+            listListTuple2 = tuple2Future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+            responseObserver.onError(e);
+            return;
+        }
+        List<String> appchainIds = listListTuple2.getValue1();
+        List<BigInteger> indics = listListTuple2.getValue2();
+        Map<String, Long> meta = new HashMap<>();
+        for (int i = 0; i < appchainIds.size(); i++) {
+            meta.put(appchainIds.get(i), indics.get(i).longValue());
+        }
+        GetMetaResponse getMetaResponse = GetMetaResponse.newBuilder().putAllMeta(meta).build();
+        responseObserver.onNext(getMetaResponse);
+        responseObserver.onCompleted();
     }
 
     @Override
@@ -256,7 +282,57 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void getReceipt(IBTP request, StreamObserver<IBTP> responseObserver) {
-        super.getReceipt(request, responseObserver);
+        Future<BigInteger> bigIntegerFuture = broker.getInMessage(request.getFrom(), BigInteger.valueOf(request.getIndex())).sendAsync();
+        BigInteger blockNum = null;
+        try {
+            blockNum = bigIntegerFuture.get();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+            responseObserver.onError(e);
+            return;
+        }
+        Flowable<Broker.ThrowEventEventResponse> throwEventEventResponseFlowable = broker.throwEventEventFlowable(DefaultBlockParameter.valueOf(blockNum), DefaultBlockParameter.valueOf(blockNum));
+        throwEventEventResponseFlowable.subscribe(new Subscriber<Broker.ThrowEventEventResponse>() {
+            @Override
+            public void onSubscribe(Subscription s) {
+                s.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(Broker.ThrowEventEventResponse event) {
+                if (event.destDID.equalsIgnoreCase(request.getTo()) && event.index.compareTo(BigInteger.valueOf(request.getIndex())) == 0) {
+                    byte[][] args = new byte[][]{};
+                    List<byte[]> collect = Arrays.stream(event.argscb.split(",")).map(String::getBytes).collect(Collectors.toList());
+                    IBTP ibtp = null;
+                    try {
+                        ibtp = AppchainPluginServiceImpl.this.generateCallBack(request, collect.toArray(args), true);
+                    } catch (InvalidProtocolBufferException e) {
+                        e.printStackTrace();
+                        responseObserver.onError(e);
+                        return;
+                    }
+                    responseObserver.onNext(ibtp);
+                    responseObserver.onCompleted();
+                }
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                responseObserver.onError(t);
+            }
+
+            @Override
+            public void onComplete() {
+                try {
+                    IBTP ibtp = generateCallBack(request, null, false);
+                    responseObserver.onNext(ibtp);
+                    responseObserver.onCompleted();
+                } catch (InvalidProtocolBufferException e) {
+                    e.printStackTrace();
+                    responseObserver.onError(e);
+                }
+            }
+        });
     }
 
     @Override

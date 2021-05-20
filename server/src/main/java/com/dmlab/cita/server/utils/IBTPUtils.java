@@ -1,6 +1,13 @@
 package com.dmlab.cita.server.utils;
 
+import com.dmlab.cita.server.contracts.Broker;
+import com.google.protobuf.ByteString;
 import pb.IBTP;
+import pb.content;
+import pb.payload;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class IBTPUtils {
     public static IBTP.Category category(IBTP ibtp) {
@@ -18,4 +25,59 @@ public class IBTPUtils {
                 return IBTP.Category.UNKNOWN;
         }
     }
+
+    public static IBTP convertFromEvent(Broker.ThrowEventEventResponse response, String from) throws Exception {
+        String[] funcs = response.funcs.split(",");
+        if (funcs.length != 3) {
+            throw new Exception("expect 3 functions, current " + response.funcs);
+        }
+
+        String[] split = response.destDID.split(":");
+        if (split.length != 4 || !"did".equals(split[0]) || "".equals(split[1]) || "".equals(split[2]) || "".equals(split[3])) {
+            throw new Exception("invalid dest DID: " + response.destDID);
+        }
+
+        String destchainid = String.join(":", split[0], split[1], split[2], ".");
+
+
+        content cont = content.newBuilder()
+                .setSrcContractId(response.fid)
+                .setDstContractId(split[3])
+                .setFunc(funcs[0])
+                .setCallback(funcs[1])
+                .setRollback(funcs[2])
+                .addAllArgs(handleArgs(response.args))
+                .addAllArgsCb(handleArgs(response.argscb))
+                .addAllArgsRb(handleArgs(response.argsrb))
+                .build();
+
+
+        payload pl = payload.newBuilder()
+                .setContent(cont.toByteString())
+                .setEncrypted(false)
+                .build();
+
+        return IBTP.newBuilder()
+                .setFrom(from)
+                .setTo(destchainid)
+                .setIndex(response.index.longValue())
+                .setType(IBTP.Type.INTERCHAIN)
+                .setTimestamp(System.nanoTime())
+                .setPayload(pl.toByteString())
+                .build();
+    }
+
+
+    private static List<ByteString> handleArgs(String argStr) {
+        List<ByteString> byteStrings = new ArrayList<>();
+        String[] args = argStr.split(",");
+
+        for (String arg : args) {
+            ByteString bytes = ByteString.copyFromUtf8(arg);
+            byteStrings.add(bytes);
+        }
+
+        return byteStrings;
+    }
+
 }

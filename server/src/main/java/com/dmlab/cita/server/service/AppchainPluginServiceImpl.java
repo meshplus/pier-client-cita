@@ -7,8 +7,8 @@ import com.citahub.cita.abi.datatypes.Function;
 import com.citahub.cita.abi.datatypes.Type;
 import com.citahub.cita.crypto.Credentials;
 import com.citahub.cita.protocol.CITAj;
+import com.citahub.cita.protocol.core.DefaultBlockParameterName;
 import com.citahub.cita.protocol.core.RemoteCall;
-import com.citahub.cita.protocol.core.methods.request.AppFilter;
 import com.citahub.cita.protocol.core.methods.response.TransactionReceipt;
 import com.citahub.cita.protocol.http.HttpService;
 import com.citahub.cita.tx.RawTransactionManager;
@@ -21,6 +21,8 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.moandjiezana.toml.Toml;
 import io.grpc.stub.StreamObserver;
+import io.reactivex.Flowable;
+import io.reactivex.functions.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.stereotype.Component;
@@ -94,7 +96,16 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void start(Empty request, StreamObserver<Empty> responseObserver) {
-        client.appGetLogs(new AppFilter());
+        Flowable<Broker.ThrowEventEventResponse> flowable = broker.throwEventEventFlowable(DefaultBlockParameterName.LATEST, DefaultBlockParameterName.PENDING);
+        flowable.subscribe(new Consumer<Broker.ThrowEventEventResponse>() {
+            @Override
+            public void accept(Broker.ThrowEventEventResponse throwEventEventResponse) throws Exception {
+                eventC.put(IBTPUtils.convertFromEvent(throwEventEventResponse, pierId));
+            }
+        });
+
+        responseObserver.onNext(Empty.newBuilder().build());
+        responseObserver.onCompleted();
     }
 
     @Override

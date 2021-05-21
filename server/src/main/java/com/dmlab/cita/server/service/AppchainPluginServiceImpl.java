@@ -73,8 +73,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             String name = toml.getString("name", "cita");
             String contractAddress = toml.getString("contract_address");
             String key = toml.getString("key");
-            Long minConfirm = toml.getLong("min_confirm");
-            config = new CitaConfig(addr, name, contractAddress, key, minConfirm);
+            config = new CitaConfig(addr, name, contractAddress, key);
         } catch (IOException e) {
             e.printStackTrace();
             responseObserver.onError(e);

@@ -11,5 +11,4 @@ public class CitaConfig {
     private String name;
     private String contractAddress;
     private String privateKey;
-    private Long minConfirm;
 }

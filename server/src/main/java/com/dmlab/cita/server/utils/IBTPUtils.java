@@ -32,17 +32,11 @@ public class IBTPUtils {
             throw new Exception("expect 3 functions, current " + response.funcs);
         }
 
-        String[] split = response.destDID.split(":");
-        if (split.length != 4 || !"did".equals(split[0]) || "".equals(split[1]) || "".equals(split[2]) || "".equals(split[3])) {
-            throw new Exception("invalid dest DID: " + response.destDID);
-        }
-
-        String destchainid = String.join(":", split[0], split[1], split[2], ".");
 
 
         content cont = content.newBuilder()
                 .setSrcContractId(response.fid)
-                .setDstContractId(split[3])
+                .setDstContractId(response.tid)
                 .setFunc(funcs[0])
                 .setCallback(funcs[1])
                 .setRollback(funcs[2])
@@ -59,7 +53,7 @@ public class IBTPUtils {
 
         return IBTP.newBuilder()
                 .setFrom(from)
-                .setTo(destchainid)
+                .setTo(response.to)
                 .setIndex(response.index.longValue())
                 .setType(IBTP.Type.INTERCHAIN)
                 .setTimestamp(System.nanoTime())

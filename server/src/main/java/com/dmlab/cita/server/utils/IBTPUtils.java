@@ -2,6 +2,7 @@ package com.dmlab.cita.server.utils;
 
 import com.dmlab.cita.server.contracts.Broker;
 import com.google.protobuf.ByteString;
+import org.web3j.crypto.Keys;
 import pb.IBTP;
 import pb.content;
 import pb.payload;
@@ -53,11 +54,12 @@ public class IBTPUtils {
 
         return IBTP.newBuilder()
                 .setFrom(from)
-                .setTo(response.to)
+                .setTo(Keys.toChecksumAddress(response.to))
                 .setIndex(response.index.longValue())
                 .setType(IBTP.Type.INTERCHAIN)
                 .setTimestamp(System.nanoTime())
                 .setPayload(pl.toByteString())
+                .setProof(ByteString.copyFromUtf8("1"))
                 .build();
     }
 

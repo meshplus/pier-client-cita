@@ -245,8 +245,6 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                 return;
             }
             sir = sir.toBuilder().setStatus(false).setMessage("InvokeInterchain tx execution failed").build();
-            responseObserver.onNext(sir);
-            responseObserver.onCompleted();
         }
 
 

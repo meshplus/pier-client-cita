@@ -363,6 +363,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                         try {
                             ibtp = IBTPUtils.convertFromEvent(throwEventEventResponse, pierId);
                             responseObserver.onNext(ibtp);
+                            responseObserver.onCompleted();
                         } catch (Exception e) {
                             e.printStackTrace();
                             responseObserver.onError(e);
@@ -388,10 +389,8 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         } catch (Exception e) {
             e.printStackTrace();
             responseObserver.onError(e);
-            return;
         }
 
-        responseObserver.onCompleted();
     }
 
     @Override
@@ -486,9 +485,9 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                     transactionReceipt = appGetTransactionReceiptFuture.get().getTransactionReceipt();
                 } catch (Exception e) {
                     responseObserver.onError(e);
-                    continue;
+                    return;
                 }
-                if (transactionReceipt.getTo().equalsIgnoreCase(config.getContractAddress())) {
+                if (config.getContractAddress().equalsIgnoreCase(transactionReceipt.getTo())) {
                     if (transactionReceipt.getLogs().size() == 1) {
                         Log log = transactionReceipt.getLogs().get(transactionReceipt.getLogs().size() - 1);
                         try {

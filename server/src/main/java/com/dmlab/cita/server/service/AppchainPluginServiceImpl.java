@@ -343,56 +343,27 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void getOutMessage(GetOutMessageRequest request, StreamObserver<IBTP> responseObserver) {
+        BigInteger block = null;
         try {
-            BigInteger block = broker.getOutMessage(request.getTo(), BigInteger.valueOf(request.getIdx())).send();
+            block = broker.getOutMessage(request.getTo(), BigInteger.valueOf(request.getIdx())).send();
+
             Flowable<Broker.ThrowEventEventResponse> flowable = broker.throwEventEventFlowable(DefaultBlockParameter.valueOf(block), DefaultBlockParameter.valueOf(block));
-
-            flowable.subscribe(new Subscriber<Broker.ThrowEventEventResponse>() {
-                private IBTP ibtp = null;
-
-                @Override
-                public void onSubscribe(Subscription subscription) {
-                    subscription.request(Long.MAX_VALUE);
-                }
-
-                @Override
-                public void onNext(Broker.ThrowEventEventResponse throwEventEventResponse) {
-                    if (ibtp != null) {
-                        return;
-                    }
-
-                    if (throwEventEventResponse.to.equals(request.getTo()) && throwEventEventResponse.index.longValue() == request.getIdx()) {
-                        try {
-                            ibtp = IBTPUtils.convertFromEvent(throwEventEventResponse, pierId);
-                            responseObserver.onNext(ibtp);
-                            responseObserver.onCompleted();
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            responseObserver.onError(e);
-                        }
-                    }
-                }
-
-                @Override
-                public void onError(Throwable throwable) {
-                    responseObserver.onError(throwable);
-                }
-
-                @Override
-                public void onComplete() {
-                    if (ibtp == null) {
-                        responseObserver.onError(new Exception("no ibtp with to " + request.getTo() + " and index " + request.getIdx() + " found"));
-                    }
+            Broker.ThrowEventEventResponse throwEventEventResponse = flowable.blockingFirst();
+            IBTP ibtp = null;
+            if (throwEventEventResponse.to.equalsIgnoreCase(request.getTo()) && throwEventEventResponse.index.longValue() == request.getIdx()) {
+                try {
+                    ibtp = IBTPUtils.convertFromEvent(throwEventEventResponse, pierId);
+                    responseObserver.onNext(ibtp);
                     responseObserver.onCompleted();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    responseObserver.onError(e);
                 }
-            });
-
-
+            }
         } catch (Exception e) {
             e.printStackTrace();
             responseObserver.onError(e);
         }
-
     }
 
     @Override

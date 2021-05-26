@@ -290,15 +290,10 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             return;
         }
 
-        Function func = new Function(content.getFunc(), Arrays.asList(
-                new Utf8String(content.getArgsRb(0).toString()),
-                new Utf8String(content.getArgsRb(1).toString()),
-                new Uint64(Long.parseLong(content.getArgsRb(2).toString()))
-        ), Arrays.<TypeReference<?>>asList(new TypeReference<Bool>() {
-        }));
-        String encode = FunctionEncoder.encode(func);
         TransactionReceipt transactionReceipt = null;
         try {
+            Function func = FunctionUtils.packFunc(content.getRollback(), content.getArgsRbList());
+            String encode = FunctionEncoder.encode(func);
             transactionReceipt = invokeInterchain(request.getIbtp().getTo(), request.getIbtp().getIndex(), content.getSrcContractId(), IBTPUtils.category(request.getIbtp()), HexUtil.hexToBytes(encode.substring(2)));
         } catch (Exception e) {
             e.printStackTrace();
@@ -312,7 +307,6 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         }
         responseObserver.onNext(rollbackIBTPResponse);
         responseObserver.onCompleted();
-
     }
 
     @Override

@@ -112,7 +112,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         flowable.subscribe(new Consumer<Broker.ThrowEventEventResponse>() {
             @Override
             public void accept(Broker.ThrowEventEventResponse throwEventEventResponse) throws Exception {
-                log.info("accept event: {}-{}", throwEventEventResponse.to, throwEventEventResponse.index);
+                log.info("accept event: {} ", throwEventEventResponse.toString());
                 eventC.put(IBTPUtils.convertFromEvent(throwEventEventResponse, pierId));
             }
         });
@@ -157,6 +157,9 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             return;
         }
 
+        log.info("ibtp: {}", request.toString());
+        log.info("content: {}", content.toString());
+
         if (IBTPUtils.category(request) == IBTP.Category.UNKNOWN) {
             responseObserver.onError(new IllegalArgumentException("invalid ibtp category"));
             return;
@@ -182,8 +185,6 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             return;
         }
 
-        System.err.println("ibtp: " + request.toString());
-        System.err.println("content:" + content.toString());
 
         Function func = null;
         try {
@@ -195,9 +196,11 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             } catch (Exception t) {
                 e.printStackTrace();
                 responseObserver.onError(t);
+                log.error("invokeInterchainWithError Exception: {}", t.toString());
                 return;
             }
             boolean status = StringUtils.hasLength(transactionReceipt.getErrorMessage());
+            log.info("invokeInterchainWithError status: {}", status);
             if (status) {
                 responseObserver.onError(new IllegalStateException("update index for ibtp failed" + request.getFrom() + "-" + request.getTo() + "-" + request.getIndex()));
                 return;
@@ -216,12 +219,14 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         } catch (Exception e) {
             e.printStackTrace();
             responseObserver.onError(e);
+            log.error("invokeInterchain Exception: {}", e.toString());
             return;
         }
 
         boolean callBackStatus = false;
         byte[][] result = new byte[0][];
         boolean status = StringUtils.hasLength(receipt.getErrorMessage());
+        log.info("invokeInterchain status: {}", status);
         if (!status) {
             Log log = receipt.getLogs().get(receipt.getLogs().size() - 1);
             try {
@@ -294,7 +299,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         try {
             Function func = FunctionUtils.packFunc(content.getRollback(), content.getArgsRbList());
             String encode = FunctionEncoder.encode(func);
-            transactionReceipt = invokeInterchain(request.getIbtp().getTo(), request.getIbtp().getIndex(), content.getSrcContractId(), IBTPUtils.category(request.getIbtp()), HexUtil.hexToBytes(encode.substring(2)));
+            transactionReceipt = invokeInterchain(request.getIbtp().getTo(), request.getIbtp().getIndex(), content.getSrcContractId(), IBTP.Category.RESPONSE, HexUtil.hexToBytes(encode.substring(2)));
         } catch (Exception e) {
             e.printStackTrace();
             responseObserver.onError(e);

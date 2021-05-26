@@ -1,28 +1,28 @@
 package com.dmlab.cita.server.service;
 
+import com.citahub.cita.abi.EventEncoder;
+import com.citahub.cita.abi.EventValues;
 import com.citahub.cita.abi.FunctionEncoder;
-import com.citahub.cita.abi.FunctionReturnDecoder;
 import com.citahub.cita.abi.TypeReference;
-import com.citahub.cita.abi.datatypes.*;
-import com.citahub.cita.abi.datatypes.generated.Uint256;
+import com.citahub.cita.abi.datatypes.Address;
+import com.citahub.cita.abi.datatypes.Event;
+import com.citahub.cita.abi.datatypes.Function;
+import com.citahub.cita.abi.datatypes.Utf8String;
 import com.citahub.cita.abi.datatypes.generated.Uint64;
 import com.citahub.cita.crypto.Credentials;
 import com.citahub.cita.protocol.CITAj;
 import com.citahub.cita.protocol.core.DefaultBlockParameter;
-import com.citahub.cita.protocol.core.DefaultBlockParameterName;
 import com.citahub.cita.protocol.core.RemoteCall;
-import com.citahub.cita.protocol.core.methods.response.AppBlock;
-import com.citahub.cita.protocol.core.methods.response.AppGetTransactionReceipt;
-import com.citahub.cita.protocol.core.methods.response.Log;
-import com.citahub.cita.protocol.core.methods.response.TransactionReceipt;
+import com.citahub.cita.protocol.core.methods.request.AppFilter;
+import com.citahub.cita.protocol.core.methods.response.*;
 import com.citahub.cita.protocol.http.HttpService;
 import com.citahub.cita.tuples.generated.Tuple2;
+import com.citahub.cita.tx.Contract;
 import com.citahub.cita.tx.RawTransactionManager;
 import com.citahub.cita.tx.TransactionManager;
 import com.citahub.cita.utils.HexUtil;
 import com.dmlab.cita.server.config.CitaConfig;
 import com.dmlab.cita.server.contracts.Broker;
-import com.dmlab.cita.server.contracts.Transfer;
 import com.dmlab.cita.server.utils.CITAUtils;
 import com.dmlab.cita.server.utils.FunctionUtils;
 import com.dmlab.cita.server.utils.IBTPUtils;
@@ -31,11 +31,8 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.moandjiezana.toml.Toml;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.Flowable;
-import io.reactivex.functions.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import pb.AppchainPluginGrpc.AppchainPluginImplBase;
@@ -45,15 +42,11 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.rmi.NoSuchObjectException;
-import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.stream.Collectors;
-
-import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.*;
 
 @GrpcService
 @Component
@@ -108,17 +101,94 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     @Override
     public void start(Empty request, StreamObserver<Empty> responseObserver) {
-        Flowable<Broker.ThrowEventEventResponse> flowable = broker.throwEventEventFlowable(DefaultBlockParameterName.LATEST, DefaultBlockParameterName.PENDING);
-        flowable.subscribe(new Consumer<Broker.ThrowEventEventResponse>() {
-            @Override
-            public void accept(Broker.ThrowEventEventResponse throwEventEventResponse) throws Exception {
-                log.info("accept event: {} ", throwEventEventResponse.toString());
-                eventC.put(IBTPUtils.convertFromEvent(throwEventEventResponse, pierId));
+        Runnable runnable = () -> {
+            final Event event = new Event("throwEvent",
+                    Arrays.<TypeReference<?>>asList(),
+                    Arrays.<TypeReference<?>>asList(new TypeReference<Uint64>() {
+                    }, new TypeReference<Address>() {
+                    }, new TypeReference<Address>() {
+                    }, new TypeReference<Utf8String>() {
+                    }, new TypeReference<Utf8String>() {
+                    }, new TypeReference<Utf8String>() {
+                    }, new TypeReference<Utf8String>() {
+                    }, new TypeReference<Utf8String>() {
+                    }));
+            String topic = EventEncoder.encode(event);
+            BigInteger startBlock = getCurBlockNumber();
+
+            while (true) {
+                try {
+                    TimeUnit.SECONDS.sleep(3);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                BigInteger endBlock = getCurBlockNumber();
+
+                if (endBlock.compareTo(startBlock) < 0) {
+                    log.warn("cur block is smaller than start block, start block: {}, end block: {}", startBlock.toString(), endBlock.toString());
+                    continue;
+                }
+
+                log.info("start block: {}, end block: {}", startBlock.toString(), endBlock.toString());
+                AppFilter filter = new AppFilter(
+                        DefaultBlockParameter.valueOf(startBlock),
+                        DefaultBlockParameter.valueOf(endBlock),
+                        broker.getContractAddress());
+                filter.addSingleTopic(topic);
+
+                try {
+                    AppLog appLog = client.appGetLogs(filter).send();
+
+                    for (AppLog.LogResult logResult : appLog.getLogs()) {
+                        if (logResult instanceof AppLog.LogObject) {
+                            Log eventLog = ((AppLog.LogObject) logResult).get();
+                            EventValues eventValues = Contract.staticExtractEventParameters(event, eventLog);
+                            Broker.ThrowEventEventResponse typedResponse = new Broker.ThrowEventEventResponse();
+                            typedResponse.index = (BigInteger) eventValues.getNonIndexedValues().get(0).getValue();
+                            typedResponse.to = (String) eventValues.getNonIndexedValues().get(1).getValue();
+                            typedResponse.fid = (String) eventValues.getNonIndexedValues().get(2).getValue();
+                            typedResponse.tid = (String) eventValues.getNonIndexedValues().get(3).getValue();
+                            typedResponse.funcs = (String) eventValues.getNonIndexedValues().get(4).getValue();
+                            typedResponse.args = (String) eventValues.getNonIndexedValues().get(5).getValue();
+                            typedResponse.argscb = (String) eventValues.getNonIndexedValues().get(6).getValue();
+                            typedResponse.argsrb = (String) eventValues.getNonIndexedValues().get(7).getValue();
+
+                            log.info("accept event: {} ", typedResponse);
+                            try {
+                                eventC.put(IBTPUtils.convertFromEvent(typedResponse, pierId));
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+
+                            startBlock = endBlock.add(BigInteger.ONE);
+                        }
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
-        });
+        };
+
+        Thread thread = new Thread(runnable);
+        thread.start();
 
         responseObserver.onNext(Empty.newBuilder().build());
         responseObserver.onCompleted();
+    }
+
+    private BigInteger getCurBlockNumber() {
+        while (true) {
+            try {
+                return client.appBlockNumber().send().getBlockNumber();
+            } catch (IOException e) {
+                e.printStackTrace();
+                try {
+                    TimeUnit.SECONDS.sleep(3);
+                } catch (InterruptedException interruptedException) {
+                    interruptedException.printStackTrace();
+                }
+            }
+        }
     }
 
     @Override

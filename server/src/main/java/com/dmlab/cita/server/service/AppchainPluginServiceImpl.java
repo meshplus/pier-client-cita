@@ -57,6 +57,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 
 @GrpcService
 @Component
+@Slf4j
 public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     private static String TYPE = "cita";
@@ -111,6 +112,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         flowable.subscribe(new Consumer<Broker.ThrowEventEventResponse>() {
             @Override
             public void accept(Broker.ThrowEventEventResponse throwEventEventResponse) throws Exception {
+                log.info("accept event: {}-{}", throwEventEventResponse.to, throwEventEventResponse.index);
                 eventC.put(IBTPUtils.convertFromEvent(throwEventEventResponse, pierId));
             }
         });

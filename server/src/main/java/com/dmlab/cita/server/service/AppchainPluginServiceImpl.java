@@ -10,6 +10,7 @@ import com.citahub.cita.abi.datatypes.Function;
 import com.citahub.cita.abi.datatypes.Utf8String;
 import com.citahub.cita.abi.datatypes.generated.Uint64;
 import com.citahub.cita.crypto.Credentials;
+import com.citahub.cita.crypto.sm2.SM2;
 import com.citahub.cita.protocol.CITAj;
 import com.citahub.cita.protocol.core.DefaultBlockParameter;
 import com.citahub.cita.protocol.core.RemoteCall;
@@ -90,8 +91,8 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             responseObserver.onError(e);
         }
 
-        TransactionManager citaTxManager = new RawTransactionManager(
-                client, Credentials.create(config.getPrivateKey()), 5, 3000);
+        TransactionManager citaTxManager = RawTransactionManager.createSM2Manager(
+                client, new SM2().fromPrivateKey(config.getPrivateKey()), 5, 3000);
 
         broker = Broker.load(config.getContractAddress(), client, citaTxManager);
 

@@ -1,4 +1,5 @@
 addr = "https://testnet.citahub.com"
 name = "cita"
 contract_address = "0xD3880ea40670eD51C3e3C0ea089fDbDc9e3FBBb4"
+data_swap_address = "0xD3880ea40670eD51C3e3C0ea089fDbDc9e3FBBb4"
 key= "0x5f0258a4778057a8a7d97809bd209055b2fbafa654ce7d31ec7191066b9225e6"

@@ -41,6 +41,16 @@ message GetInMessageResponse {
     repeated bytes result = 1;
 }
 
+message CheckHashRequest{
+    string hash=1;
+}
+
+message CheckHashResponse {
+    bytes receiptData=1;
+    bytes headerData=2;
+}
+
+
 message GetMetaResponse {
     map<string, uint64> meta = 1;
 }
@@ -68,6 +78,7 @@ service AppchainPlugin {
     rpc GetCallbackMeta(Empty) returns (GetMetaResponse);
     rpc CommitCallback(pb.IBTP) returns (Empty);
     rpc GetReceipt(pb.IBTP) returns (pb.IBTP);
+    rpc CheckHash(CheckHashRequest) returns (CheckHashResponse);
     rpc Name(Empty) returns (NameResponse);
     rpc Type(Empty) returns (TypeResponse);
 }

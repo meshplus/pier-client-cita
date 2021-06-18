@@ -3,15 +3,23 @@
 		"constant": false,
 		"inputs": [
 			{
-				"name": "destContractDID",
+				"name": "destChainID",
+				"type": "address"
+			},
+			{
+				"name": "destAddr",
 				"type": "string"
 			},
 			{
 				"name": "key",
 				"type": "string"
+			},
+			{
+				"name": "value",
+				"type": "string"
 			}
 		],
-		"name": "get",
+		"name": "set",
 		"outputs": [],
 		"payable": false,
 		"stateMutability": "nonpayable",
@@ -52,7 +60,47 @@
 				"type": "string"
 			}
 		],
+		"name": "setData",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "key",
+				"type": "string"
+			},
+			{
+				"name": "value",
+				"type": "string"
+			}
+		],
 		"name": "interchainSet",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "destChainID",
+				"type": "address"
+			},
+			{
+				"name": "destAddr",
+				"type": "string"
+			},
+			{
+				"name": "key",
+				"type": "string"
+			}
+		],
+		"name": "get",
 		"outputs": [],
 		"payable": false,
 		"stateMutability": "nonpayable",
@@ -78,21 +126,20 @@
 		"type": "function"
 	},
 	{
-		"constant": false,
+		"anonymous": false,
 		"inputs": [
 			{
+				"indexed": false,
 				"name": "key",
 				"type": "string"
 			},
 			{
+				"indexed": false,
 				"name": "value",
 				"type": "string"
 			}
 		],
-		"name": "set",
-		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
+		"name": "LogDataExists",
+		"type": "event"
 	}
 ]

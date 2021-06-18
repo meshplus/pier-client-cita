@@ -13,6 +13,7 @@ import com.citahub.cita.crypto.Credentials;
 import com.citahub.cita.protocol.CITAj;
 import com.citahub.cita.protocol.core.DefaultBlockParameter;
 import com.citahub.cita.protocol.core.RemoteCall;
+import com.citahub.cita.protocol.core.Request;
 import com.citahub.cita.protocol.core.methods.request.AppFilter;
 import com.citahub.cita.protocol.core.methods.response.*;
 import com.citahub.cita.protocol.http.HttpService;
@@ -23,9 +24,12 @@ import com.citahub.cita.tx.TransactionManager;
 import com.citahub.cita.utils.HexUtil;
 import com.dmlab.cita.server.config.CitaConfig;
 import com.dmlab.cita.server.contracts.Broker;
+import com.dmlab.cita.server.contracts.DataSwap;
 import com.dmlab.cita.server.utils.CITAUtils;
 import com.dmlab.cita.server.utils.FunctionUtils;
 import com.dmlab.cita.server.utils.IBTPUtils;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.moandjiezana.toml.Toml;
@@ -62,6 +66,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
     private static BlockingQueue<IBTP> eventC = new ArrayBlockingQueue<IBTP>(1024);
     private Broker broker;
+    private DataSwap dataSwap;
 
 
     @Override
@@ -73,8 +78,9 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             String addr = toml.getString("addr", "https://testnet.citahub.com");
             String name = toml.getString("name", "cita");
             String contractAddress = toml.getString("contract_address");
+            String dataSwapAddress = toml.getString("data_swap_address");
             String key = toml.getString("key");
-            config = new CitaConfig(addr, name, contractAddress, key);
+            config = new CitaConfig(addr, name, contractAddress, dataSwapAddress, key);
         } catch (IOException e) {
             e.printStackTrace();
             responseObserver.onError(e);
@@ -94,6 +100,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                 client, Credentials.create(config.getPrivateKey()), 5, 3000);
 
         broker = Broker.load(config.getContractAddress(), client, citaTxManager);
+        dataSwap = DataSwap.load(config.getDataSwapAddress(), client, citaTxManager);
 
         responseObserver.onNext(Empty.getDefaultInstance());
         responseObserver.onCompleted();
@@ -557,6 +564,44 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             return;
         }
         responseObserver.onNext(callBack);
+        responseObserver.onCompleted();
+    }
+
+
+    @Override
+    public void checkHash(CheckHashRequest request, StreamObserver<CheckHashResponse> responseObserver) {
+        long currentHeight;
+        AppBlock.Header header;
+        byte[] headerData;
+        byte[] receiptData;
+        try {
+            currentHeight = client.appBlockNumber()
+                    .send().getBlockNumber().longValue();
+
+            long validUntilBlock = currentHeight + 80;
+            String nonce = CITAUtils.getNonce();
+            RemoteCall<TransactionReceipt> receiptRemoteCall = dataSwap.getData(request.getHash(), BigInteger.ZERO, 10000000L, nonce, validUntilBlock, version, chainId, "");
+            Future<TransactionReceipt> transactionReceiptFuture = receiptRemoteCall.sendAsync();
+            TransactionReceipt transactionReceipt = transactionReceiptFuture.get();
+            log.info("tx hash: {}", transactionReceipt.getTransactionHash());
+            List<DataSwap.LogDataExistsEventResponse> logs = dataSwap.getLogDataExistsEvents(transactionReceipt);
+            Request<?, AppBlock> appBlockRequest = client.appGetBlockByNumber(DefaultBlockParameter.valueOf(transactionReceipt.getBlockNumber()), false);
+
+
+            header = appBlockRequest.send().getBlock().getHeader();
+            ObjectMapper mapper = new ObjectMapper();
+            headerData = mapper.writeValueAsBytes(header);
+            receiptData = mapper.writeValueAsBytes(transactionReceipt);
+        } catch (Exception e) {
+            e.printStackTrace();
+            responseObserver.onError(e);
+            return;
+        }
+
+        responseObserver.onNext(CheckHashResponse.newBuilder()
+                .setHeaderData(ByteString.copyFrom(headerData))
+                .setReceiptData(ByteString.copyFrom(receiptData))
+                .build());
         responseObserver.onCompleted();
     }
 

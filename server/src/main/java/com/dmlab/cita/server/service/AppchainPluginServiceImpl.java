@@ -10,6 +10,8 @@ import com.citahub.cita.abi.datatypes.Function;
 import com.citahub.cita.abi.datatypes.Utf8String;
 import com.citahub.cita.abi.datatypes.generated.Uint64;
 import com.citahub.cita.crypto.Credentials;
+import com.citahub.cita.crypto.sm2.SM2;
+import com.citahub.cita.crypto.sm2.SM2KeyPair;
 import com.citahub.cita.protocol.CITAj;
 import com.citahub.cita.protocol.core.DefaultBlockParameter;
 import com.citahub.cita.protocol.core.RemoteCall;
@@ -79,8 +81,9 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             String name = toml.getString("name", "cita");
             String contractAddress = toml.getString("contract_address");
             String dataSwapAddress = toml.getString("data_swap_address");
+            String algo = toml.getString("algo");
             String key = toml.getString("key");
-            config = new CitaConfig(addr, name, contractAddress, dataSwapAddress, key);
+            config = new CitaConfig(addr, name, contractAddress, dataSwapAddress, algo, key);
         } catch (IOException e) {
             e.printStackTrace();
             responseObserver.onError(e);
@@ -95,9 +98,14 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             e.printStackTrace();
             responseObserver.onError(e);
         }
+        TransactionManager citaTxManager = null;
+        if ("sm2".equalsIgnoreCase(config.getAlgo())) {
+            citaTxManager = RawTransactionManager.createSM2Manager(client, new SM2().fromPrivateKey(config.getPrivateKey()), 5, 3000);
+        } else {
+            citaTxManager = new RawTransactionManager(
+                    client, Credentials.create(config.getPrivateKey()), 5, 3000);
+        }
 
-        TransactionManager citaTxManager = new RawTransactionManager(
-                client, Credentials.create(config.getPrivateKey()), 5, 3000);
 
         broker = Broker.load(config.getContractAddress(), client, citaTxManager);
         dataSwap = DataSwap.load(config.getDataSwapAddress(), client, citaTxManager);

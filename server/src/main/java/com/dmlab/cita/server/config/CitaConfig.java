@@ -11,5 +11,6 @@ public class CitaConfig {
     private String name;
     private String contractAddress;
     private String dataSwapAddress;
+    private String algo;
     private String privateKey;
 }

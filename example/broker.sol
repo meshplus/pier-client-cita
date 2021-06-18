@@ -6,7 +6,7 @@ contract Broker {
     address[] contracts;
     address[] admins;
 
-    event throwEvent(uint64 index, address to, string fid, string tid, string funcs, string args, string argscb, string argsrb);
+    event throwEvent(uint64 index, address to, address fid, string tid, string funcs, string args, string argscb, string argsrb);
     event LogInterchainData(bool status, string data);
     event LogInterchainStatus(bool status);
 

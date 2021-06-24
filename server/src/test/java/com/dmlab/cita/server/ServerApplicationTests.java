@@ -74,12 +74,8 @@ class ServerApplicationTests {
 
     @Test
     void address() throws JsonProcessingException {
-        TT t = new TT();
-        t.tt = 1;
-        ObjectMapper mapper = new ObjectMapper();
-//        mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-        String value = mapper.writeValueAsString(t);
-        System.out.println(value);
+        boolean b = "0x992616f176F3Eb9E3768F7689fBB538E686D76aB".equalsIgnoreCase("0x992616f176f3eb9e3768f7689fbb538e686d76ab");
+        System.out.println(b);
     }
 
 

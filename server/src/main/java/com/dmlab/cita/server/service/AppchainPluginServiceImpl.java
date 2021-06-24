@@ -250,7 +250,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             return;
         }
 
-        if (IBTPUtils.category(request) == IBTP.Category.RESPONSE && content.getFunc().equals("")) {
+        if (IBTPUtils.category(request) == IBTP.Category.RESPONSE && content.getFunc().trim().equals("")) {
             TransactionReceipt transactionReceipt = null;
             try {
                 transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex(), IBTPUtils.category(request) == IBTP.Category.REQUEST);
@@ -430,9 +430,11 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         BigInteger block = null;
         try {
             block = broker.getOutMessage(request.getTo(), BigInteger.valueOf(request.getIdx())).send();
-
+            log.info("get missing ibtp to:{}, idx:{}, height:{}", request.getTo(), request.getIdx(), block.intValue());
             Flowable<Broker.ThrowEventEventResponse> flowable = broker.throwEventEventFlowable(DefaultBlockParameter.valueOf(block), DefaultBlockParameter.valueOf(block));
             Broker.ThrowEventEventResponse throwEventEventResponse = flowable.blockingFirst();
+            log.info("throwEventEventResponse to:{}, idx:{}", throwEventEventResponse.to, throwEventEventResponse.index.intValue());
+
             IBTP ibtp = null;
             if (throwEventEventResponse.to.equalsIgnoreCase(request.getTo()) && throwEventEventResponse.index.longValue() == request.getIdx()) {
                 try {

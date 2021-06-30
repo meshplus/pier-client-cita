@@ -85,7 +85,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             String key = toml.getString("key");
             config = new CitaConfig(addr, name, contractAddress, dataSwapAddress, algo, key);
         } catch (IOException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -95,7 +95,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             chainId = CITAUtils.getChainId(client);
             log.info("Cita version:{}, chainId:{}", version, chainId.intValue());
         } catch (IOException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
         }
         TransactionManager citaTxManager = null;
@@ -135,7 +135,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                 try {
                     TimeUnit.SECONDS.sleep(3);
                 } catch (InterruptedException e) {
-                    log.error("", e);
+                    e.printStackTrace();
                 }
                 BigInteger endBlock = getCurBlockNumber();
 
@@ -172,14 +172,14 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                             try {
                                 eventC.put(IBTPUtils.convertFromEvent(typedResponse, pierId));
                             } catch (Exception e) {
-                                log.error("", e);
+                                log.info(e.getMessage());
                             }
 
                             startBlock = endBlock.add(BigInteger.ONE);
                         }
                     }
                 } catch (IOException e) {
-                    log.error("", e);
+                    e.printStackTrace();
                 }
             }
         };
@@ -196,7 +196,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             try {
                 return client.appBlockNumber().send().getBlockNumber();
             } catch (IOException e) {
-                log.error("", e);
+                e.printStackTrace();
                 try {
                     TimeUnit.SECONDS.sleep(3);
                 } catch (InterruptedException interruptedException) {
@@ -219,7 +219,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                 IBTP ibtp = eventC.take();
                 responseObserver.onNext(ibtp);
             } catch (InterruptedException e) {
-                log.error("", e);
+                e.printStackTrace();
                 responseObserver.onError(e);
                 break;
             }
@@ -237,7 +237,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             payload = pb.payload.parseFrom(request.getPayload());
             content = pb.content.parseFrom(payload.getContent());
         } catch (InvalidProtocolBufferException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -255,7 +255,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             try {
                 transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex(), IBTPUtils.category(request) == IBTP.Category.REQUEST);
             } catch (Exception e) {
-                log.error("", e);
+                e.printStackTrace();
                 responseObserver.onError(e);
                 return;
             }
@@ -279,7 +279,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             try {
                 transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex(), IBTPUtils.category(request) == IBTP.Category.REQUEST);
             } catch (Exception t) {
-                log.error("", e);
+                e.printStackTrace();
                 responseObserver.onError(t);
                 log.error("invokeInterchainWithError Exception: {}", t.toString());
                 return;
@@ -302,7 +302,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         try {
             receipt = invokeInterchain(request.getFrom(), request.getIndex(), content.getDstContractId(), IBTPUtils.category(request), HexUtil.hexToBytes(funcEncoder.substring(2)));
         } catch (Exception e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             log.error("invokeInterchain Exception: {}", e.toString());
             return;
@@ -327,7 +327,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             try {
                 transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex(), IBTPUtils.category(request) == IBTP.Category.REQUEST);
             } catch (Exception e) {
-                log.error("", e);
+                e.printStackTrace();
                 responseObserver.onError(e);
                 return;
             }
@@ -350,7 +350,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         try {
             callBack = generateCallBack(request, result, callBackStatus);
         } catch (InvalidProtocolBufferException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -369,7 +369,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             payload = pb.payload.parseFrom(request.getIbtp().getPayload());
             content = pb.content.parseFrom(payload.getContent());
         } catch (InvalidProtocolBufferException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -386,7 +386,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             String encode = FunctionEncoder.encode(func);
             transactionReceipt = invokeInterchain(request.getIbtp().getTo(), request.getIbtp().getIndex(), content.getSrcContractId(), IBTP.Category.RESPONSE, HexUtil.hexToBytes(encode.substring(2)));
         } catch (Exception e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
 
@@ -405,7 +405,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         try {
             ibtp = generateCallBack(request, null, false);
         } catch (InvalidProtocolBufferException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -417,7 +417,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                 return;
             }
         } catch (Exception e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -442,12 +442,12 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                     responseObserver.onNext(ibtp);
                     responseObserver.onCompleted();
                 } catch (Exception e) {
-                    log.error("", e);
+                    e.printStackTrace();
                     responseObserver.onError(e);
                 }
             }
         } catch (Exception e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
         }
     }
@@ -458,7 +458,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         try {
             inBlock = broker.getInMessage(request.getFrom(), BigInteger.valueOf(request.getIdx())).send();
         } catch (Exception e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             responseObserver.onCompleted();
             return;
@@ -490,7 +490,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         try {
             listListTuple2 = tuple2Future.get();
         } catch (InterruptedException | ExecutionException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -518,7 +518,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             payload = pb.payload.parseFrom(request.getPayload());
             content = pb.content.parseFrom(payload.getContent());
         } catch (InvalidProtocolBufferException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -528,7 +528,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         try {
             blockNum = bigIntegerFuture.get();
         } catch (InterruptedException | ExecutionException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -562,14 +562,14 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                 }
             }
         } catch (Exception e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
         }
         IBTP callBack = null;
         try {
             callBack = generateCallBack(request, result, callBackStatus);
         } catch (InvalidProtocolBufferException e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
@@ -581,9 +581,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
     @Override
     public void checkHash(CheckHashRequest request, StreamObserver<CheckHashResponse> responseObserver) {
         long currentHeight;
-        AppBlock.Header header;
-        byte[] headerData;
-        byte[] receiptData;
+        boolean isExist = false;
         try {
             currentHeight = client.appBlockNumber()
                     .send().getBlockNumber().longValue();
@@ -595,22 +593,19 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             TransactionReceipt transactionReceipt = transactionReceiptFuture.get();
             log.info("tx hash: {}", transactionReceipt.getTransactionHash());
             List<DataSwap.LogDataExistsEventResponse> logs = dataSwap.getLogDataExistsEvents(transactionReceipt);
-            Request<?, AppBlock> appBlockRequest = client.appGetBlockByNumber(DefaultBlockParameter.valueOf(transactionReceipt.getBlockNumber()), false);
 
+            if (!logs.isEmpty()) {
+                isExist = true;
+            }
 
-            header = appBlockRequest.send().getBlock().getHeader();
-            ObjectMapper mapper = new ObjectMapper();
-            headerData = mapper.writeValueAsBytes(header);
-            receiptData = mapper.writeValueAsBytes(transactionReceipt);
         } catch (Exception e) {
-            log.error("", e);
+            e.printStackTrace();
             responseObserver.onError(e);
             return;
         }
 
         responseObserver.onNext(CheckHashResponse.newBuilder()
-                .setHeaderData(ByteString.copyFrom(headerData))
-                .setReceiptData(ByteString.copyFrom(receiptData))
+                .setRes(isExist)
                 .build());
         responseObserver.onCompleted();
     }

@@ -15,7 +15,10 @@ import com.citahub.cita.protocol.system.CITASystemContract;
 import com.citahub.cita.utils.Numeric;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.ByteString;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import pb.content;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -24,6 +27,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+@Slf4j
 class ServerApplicationTests {
 
     @Test
@@ -74,8 +78,8 @@ class ServerApplicationTests {
 
     @Test
     void address() throws JsonProcessingException {
-        boolean b = "0x992616f176F3Eb9E3768F7689fBB538E686D76aB".equalsIgnoreCase("0x992616f176f3eb9e3768f7689fbb538e686d76ab");
-        System.out.println(b);
+        content content = pb.content.newBuilder().setDstContractId("111").build();
+        System.out.println(content.toString());
     }
 
 

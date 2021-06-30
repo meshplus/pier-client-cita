@@ -1,8 +1,13 @@
 package com.dmlab.cita.server.utils;
 
+import com.citahub.cita.utils.HexUtil;
 import com.dmlab.cita.server.contracts.Broker;
 import com.google.protobuf.ByteString;
+import org.web3j.abi.TypeDecoder;
+import org.web3j.abi.datatypes.Address;
 import org.web3j.crypto.Keys;
+import org.web3j.utils.Convert;
+import org.web3j.utils.Numeric;
 import pb.IBTP;
 import pb.content;
 import pb.payload;
@@ -33,7 +38,13 @@ public class IBTPUtils {
             throw new Exception("expect 3 functions, current " + response.funcs);
         }
 
+        if (isValidAddress(response.fid)) {
+            response.fid = Numeric.prependHexPrefix(response.fid);
+        }
 
+        if (isValidAddress(response.tid)) {
+            response.tid = Numeric.prependHexPrefix(response.tid);
+        }
 
         content cont = content.newBuilder()
                 .setSrcContractId(response.fid)
@@ -76,4 +87,15 @@ public class IBTPUtils {
         return byteStrings;
     }
 
+    public static boolean isValidAddress(String input) {
+        String cleanInput = Numeric.cleanHexPrefix(input);
+
+        try {
+            Numeric.toBigIntNoPrefix(cleanInput);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+
+        return cleanInput.length() == 40;
+    }
 }

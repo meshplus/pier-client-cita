@@ -6,153 +6,152 @@ option java_multiple_files = true;
 message Empty {}
 
 message InitializeRequest {
-    string config_path = 1;
-    string pier_id = 2;
-    bytes extra = 3;
+  string config_path = 1;
+  string pier_id = 2;
+  bytes extra = 3;
 }
 
 message SubmitIBTPResponse {
-    bool status = 1;
-    string message = 2;
-    pb.IBTP result = 3;
+  bool status = 1;
+  string message = 2;
+  pb.IBTP result = 3;
 }
 
 message RollbackIBTPRequest {
-    pb.IBTP ibtp = 1;
-    bool srcChain = 2;
+  pb.IBTP ibtp = 1;
+  bool srcChain = 2;
 }
 
 message RollbackIBTPResponse {
-    bool status = 1;
-    string message = 2;
+  bool status = 1;
+  string message = 2;
 }
 
 message GetOutMessageRequest {
-    string to =1;
-    uint64 idx =2;
+  string to = 1;
+  uint64 idx = 2;
 }
 
 message GetInMessageRequest {
-    string from =1;
-    uint64 idx =2;
+  string from = 1;
+  uint64 idx = 2;
 }
 
 message GetInMessageResponse {
-    repeated bytes result = 1;
+  repeated bytes result = 1;
 }
 
 message CheckHashRequest{
-    string hash=1;
+  string hash = 1;
 }
 
 message CheckHashResponse {
-    bytes receiptData=1;
-    bytes headerData=2;
+  bool res = 1;
 }
 
 
 message GetMetaResponse {
-    map<string, uint64> meta = 1;
+  map<string, uint64> meta = 1;
 }
 
 message NameResponse {
-    string name = 1;
+  string name = 1;
 }
 
 message TypeResponse {
-    string type = 1;
+  string type = 1;
 }
 
 service AppchainPlugin {
-    rpc Initialize(InitializeRequest) returns (Empty);
-    rpc Start(Empty) returns (Empty);
-    rpc Stop(Empty) returns (Empty);
-    rpc GetIBTP(Empty) returns (stream pb.IBTP);
-    rpc SubmitIBTP(pb.IBTP) returns (SubmitIBTPResponse);
-    rpc RollbackIBTP(RollbackIBTPRequest) returns (RollbackIBTPResponse);
-    rpc IncreaseInMeta(pb.IBTP) returns (pb.IBTP);
-    rpc GetOutMessage(GetOutMessageRequest) returns (pb.IBTP);
-    rpc GetInMessage(GetInMessageRequest) returns (GetInMessageResponse);
-    rpc GetInMeta(Empty) returns (GetMetaResponse);
-    rpc GetOutMeta(Empty) returns (GetMetaResponse);
-    rpc GetCallbackMeta(Empty) returns (GetMetaResponse);
-    rpc CommitCallback(pb.IBTP) returns (Empty);
-    rpc GetReceipt(pb.IBTP) returns (pb.IBTP);
-    rpc CheckHash(CheckHashRequest) returns (CheckHashResponse);
-    rpc Name(Empty) returns (NameResponse);
-    rpc Type(Empty) returns (TypeResponse);
+  rpc Initialize(InitializeRequest) returns (Empty);
+  rpc Start(Empty) returns (Empty);
+  rpc Stop(Empty) returns (Empty);
+  rpc GetIBTP(Empty) returns (stream pb.IBTP);
+  rpc SubmitIBTP(pb.IBTP) returns (SubmitIBTPResponse);
+  rpc RollbackIBTP(RollbackIBTPRequest) returns (RollbackIBTPResponse);
+  rpc IncreaseInMeta(pb.IBTP) returns (pb.IBTP);
+  rpc GetOutMessage(GetOutMessageRequest) returns (pb.IBTP);
+  rpc GetInMessage(GetInMessageRequest) returns (GetInMessageResponse);
+  rpc GetInMeta(Empty) returns (GetMetaResponse);
+  rpc GetOutMeta(Empty) returns (GetMetaResponse);
+  rpc GetCallbackMeta(Empty) returns (GetMetaResponse);
+  rpc CommitCallback(pb.IBTP) returns (Empty);
+  rpc GetReceipt(pb.IBTP) returns (pb.IBTP);
+  rpc CheckHash(CheckHashRequest) returns (CheckHashResponse);
+  rpc Name(Empty) returns (NameResponse);
+  rpc Type(Empty) returns (TypeResponse);
 }
 
 message IBTP {
-    enum Type {
-        INTERCHAIN = 0;
-        RECEIPT_SUCCESS = 1;
-        RECEIPT_FAILURE = 2;
-        ASSET_EXCHANGE_INIT = 3;
-        ASSET_EXCHANGE_REDEEM = 4;
-        ASSET_EXCHANGE_REFUND = 5;
-        ASSET_EXCHANGE_RECEIPT = 6;
-    }
+  enum Type {
+    INTERCHAIN = 0;
+    RECEIPT_SUCCESS = 1;
+    RECEIPT_FAILURE = 2;
+    ASSET_EXCHANGE_INIT = 3;
+    ASSET_EXCHANGE_REDEEM = 4;
+    ASSET_EXCHANGE_REFUND = 5;
+    ASSET_EXCHANGE_RECEIPT = 6;
+  }
 
-    enum Category {
-        REQUEST = 0;
-        RESPONSE = 1;
-        UNKNOWN = 2;
-    }
+  enum Category {
+    REQUEST = 0;
+    RESPONSE = 1;
+    UNKNOWN = 2;
+  }
 
-    // ID of sending chain
-    string from = 1;
-    // ID of receiving chain
-    string to = 2;
-    // Index of inter-chain transaction
-    uint64 index = 3;
-    // inter-chain transaction type
-    Type type = 4;
-    // Timestamp of inter-chain events
-    int64 timestamp = 5;
-    // Proof of inter-chain transactions
-    bytes proof = 6;
-    // Encoded content used by inter-chain
-    bytes payload = 7;
-    // info about other txs in the same group
-    StringUint64Map group = 8;
-    // Message version
-    string version = 9;
-    // Self-defined fields used by app-chain
-    bytes extra = 10;
+  // ID of sending chain
+  string from = 1;
+  // ID of receiving chain
+  string to = 2;
+  // Index of inter-chain transaction
+  uint64 index = 3;
+  // inter-chain transaction type
+  Type type = 4;
+  // Timestamp of inter-chain events
+  int64 timestamp = 5;
+  // Proof of inter-chain transactions
+  bytes proof = 6;
+  // Encoded content used by inter-chain
+  bytes payload = 7;
+  // info about other txs in the same group
+  StringUint64Map group = 8;
+  // Message version
+  string version = 9;
+  // Self-defined fields used by app-chain
+  bytes extra = 10;
 }
 
 message payload {
-    bool encrypted = 1;
-    bytes content = 2;
+  bool encrypted = 1;
+  bytes content = 2;
 }
 
 message content {
-    string src_contract_id = 1;
-    string dst_contract_id = 2;
-    string func = 3;
-    repeated bytes args = 4;
-    string callback = 5;
-    repeated bytes argsCb = 6;
-    string rollback = 7;
-    repeated bytes argsRb = 8;
+  string src_contract_id = 1;
+  string dst_contract_id = 2;
+  string func = 3;
+  repeated bytes args = 4;
+  string callback = 5;
+  repeated bytes argsCb = 6;
+  string rollback = 7;
+  repeated bytes argsRb = 8;
 }
 
 message IBTPs {
-    repeated IBTP ibtps = 1;
+  repeated IBTP ibtps = 1;
 }
 
 
 message Uint64Slice {
-    repeated uint64 slice = 1;
+  repeated uint64 slice = 1;
 }
 
 message StringUint64Map {
-    repeated string keys = 1;
-    repeated uint64 vals = 2;
+  repeated string keys = 1;
+  repeated uint64 vals = 2;
 }
 
 message StringUint64SliceMap {
-    repeated string keys = 1;
-    repeated Uint64Slice vals = 2;
+  repeated string keys = 1;
+  repeated Uint64Slice vals = 2;
 }

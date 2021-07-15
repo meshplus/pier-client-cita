@@ -1,9 +1,10 @@
 package com.dmlab.cita.server;
 
-import com.citahub.cita.abi.datatypes.Address;
-import com.citahub.cita.abi.datatypes.DynamicArray;
-import com.citahub.cita.abi.datatypes.Type;
+import com.citahub.cita.abi.FunctionEncoder;
+import com.citahub.cita.abi.TypeReference;
+import com.citahub.cita.abi.datatypes.*;
 import com.citahub.cita.abi.datatypes.generated.Bytes4;
+import com.citahub.cita.abi.datatypes.generated.Uint64;
 import com.citahub.cita.protobuf.ConvertStrByte;
 import com.citahub.cita.protocol.CITAj;
 import com.citahub.cita.protocol.core.DefaultBlockParameter;
@@ -21,10 +22,7 @@ import org.junit.jupiter.api.Test;
 import pb.content;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -49,14 +47,30 @@ class ServerApplicationTests {
         /*
          修改：根据跨链合约生成的signature修改此值
          */
-        funcs.add("3b1f68ff");
+        funcs.add("3aabe619");
+        funcs.add("8129fc1c");
+        funcs.add("b38ff85f");
+        funcs.add("7cf636ce");
+        funcs.add("c20cab50");
+        funcs.add("a0342a3f");
+        funcs.add("83c44c27");
+        funcs.add("67b9fa3b");
+        funcs.add("3b6bbe4a");
+        funcs.add("3e131c4e");
+        funcs.add("99489c21");
+        funcs.add("ae55c888");
+        funcs.add("8ca3c553");
         List<String> contractAddrs = new ArrayList<>();
         int index = funcs.size();
         while (index > 0)
         {
-            contractAddrs.add("0xa9234240c15b8ee015478f652740c70c979c9f9b");
+//            contractAddrs.add("0xc5e053f08cfe090b49227d006615e4e7d0aabf91");
+//            contractAddrs.add("0x0b3eb37a0133963deb9a62d4e60883fc5ad75c11");
+//            contractAddrs.add("0x403d6bab79aec7fb3008a2e129211ff7f3c46c7c");
+            contractAddrs.add("0xaf81d9a5bb0ba5f3002892a986c8a120981aab91");
             index --;
         }
+
 
         //添加合约可调用权限，permissionAddr 不用修改
         String permissionAddr = "0xc5752095480a8cbb73d3358d5697098e2d8f45cd";
@@ -78,8 +92,13 @@ class ServerApplicationTests {
 
     @Test
     void address() throws JsonProcessingException {
-        content content = pb.content.newBuilder().setDstContractId("111").build();
-        System.out.println(content.toString());
+        Function invokeInterchain = new Function(
+                "invokeInterchain",
+                Arrays.<Type>asList(new Utf8String(""),
+                        new Uint64(new BigInteger("1"))),
+                Collections.<TypeReference<?>>emptyList());
+        String funcEncoder = FunctionEncoder.encode(invokeInterchain);
+        System.out.println(funcEncoder.toString());
     }
 
 

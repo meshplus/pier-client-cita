@@ -311,7 +311,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         boolean callBackStatus = false;
         byte[][] result = new byte[0][];
         boolean status = StringUtils.hasLength(receipt.getErrorMessage());
-        log.info("invokeInterchain status: {}", status);
+        log.info("invokeInterchain status: {}", !status);
         if (!status) {
             Log log = receipt.getLogs().get(receipt.getLogs().size() - 1);
             try {

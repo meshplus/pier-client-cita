@@ -98,6 +98,9 @@ public class FunctionUtils {
                 Utf8String returnString = (Utf8String) typeList.get(1);
                 return new byte[][]{new byte[]{(byte) (returnBool.getValue() ? 1 : 0)}, returnString.getValue().getBytes()};
             }
+            case "interchainSet": {
+                return new byte[][]{};
+            }
             case "interchainRollback": {
                 return new byte[][]{};
             }

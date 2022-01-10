@@ -10,7 +10,7 @@ public class CitaConfig {
     private String addr;
     private String name;
     private String contractAddress;
-    private String dataSwapAddress;
     private String algo;
     private String privateKey;
+    private Long timeoutHeight;
 }

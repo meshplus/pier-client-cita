@@ -3,30 +3,113 @@
 		"constant": false,
 		"inputs": [
 			{
-				"name": "srcChainID",
-				"type": "address"
+				"name": "chainID",
+				"type": "string"
 			},
 			{
-				"name": "index",
-				"type": "uint64"
+				"name": "serviceID",
+				"type": "string"
 			},
 			{
-				"name": "destAddr",
-				"type": "address"
-			},
-			{
-				"name": "req",
-				"type": "bool"
-			},
-			{
-				"name": "bizCallData",
-				"type": "bytes"
+				"name": "whiteList",
+				"type": "address[]"
 			}
 		],
-		"name": "invokeInterchain",
+		"name": "registerRemoteService",
 		"outputs": [],
-		"payable": true,
-		"stateMutability": "payable",
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "outServicePair",
+				"type": "string"
+			},
+			{
+				"name": "idx",
+				"type": "uint64"
+			}
+		],
+		"name": "getOutMessage",
+		"outputs": [
+			{
+				"name": "func",
+				"type": "string"
+			},
+			{
+				"name": "args",
+				"type": "bytes[]"
+			},
+			{
+				"name": "encrypt",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "serviceID",
+				"type": "string"
+			}
+		],
+		"name": "genFullServiceID",
+		"outputs": [
+			{
+				"name": "fullServiceID",
+				"type": "string"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "chainID",
+				"type": "string"
+			}
+		],
+		"name": "getAppchainInfo",
+		"outputs": [
+			{
+				"name": "broker",
+				"type": "string"
+			},
+			{
+				"name": "trustRoot",
+				"type": "bytes"
+			},
+			{
+				"name": "ruleAddr",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "getLocalServiceList",
+		"outputs": [
+			{
+				"name": "fullServiceIDList",
+				"type": "string[]"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -35,16 +118,42 @@
 		"name": "getCallbackMeta",
 		"outputs": [
 			{
-				"name": "",
-				"type": "address[]"
+				"name": "callbackServicePairs",
+				"type": "string[]"
 			},
 			{
-				"name": "",
+				"name": "indices",
 				"type": "uint64[]"
 			}
 		],
 		"payable": false,
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "chainID",
+				"type": "string"
+			},
+			{
+				"name": "broker",
+				"type": "string"
+			},
+			{
+				"name": "ruleAddr",
+				"type": "address"
+			},
+			{
+				"name": "trustRoot",
+				"type": "bytes"
+			}
+		],
+		"name": "registerAppchain",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
@@ -62,37 +171,40 @@
 		"type": "function"
 	},
 	{
-		"constant": false,
-		"inputs": [
+		"constant": true,
+		"inputs": [],
+		"name": "getChainID",
+		"outputs": [
 			{
-				"name": "destChainID",
-				"type": "address"
-			},
-			{
-				"name": "destAddr",
+				"name": "bitxhubID",
 				"type": "string"
 			},
 			{
-				"name": "funcs",
-				"type": "string"
-			},
-			{
-				"name": "args",
-				"type": "string"
-			},
-			{
-				"name": "argscb",
-				"type": "string"
-			},
-			{
-				"name": "argsrb",
+				"name": "appchainID",
 				"type": "string"
 			}
 		],
-		"name": "emitInterchainEvent",
-		"outputs": [],
 		"payable": false,
-		"stateMutability": "nonpayable",
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "addressToString",
+		"outputs": [
+			{
+				"name": "asciiString",
+				"type": "string"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -101,11 +213,11 @@
 		"name": "getInnerMeta",
 		"outputs": [
 			{
-				"name": "",
-				"type": "address[]"
+				"name": "inServicePairs",
+				"type": "string[]"
 			},
 			{
-				"name": "",
+				"name": "indices",
 				"type": "uint64[]"
 			}
 		],
@@ -117,26 +229,38 @@
 		"constant": false,
 		"inputs": [
 			{
-				"name": "srcChainID",
+				"name": "srcAddr",
 				"type": "address"
+			},
+			{
+				"name": "dstFullID",
+				"type": "string"
 			},
 			{
 				"name": "index",
 				"type": "uint64"
 			},
 			{
-				"name": "req",
-				"type": "bool"
+				"name": "typ",
+				"type": "uint64"
 			},
 			{
-				"name": "err",
-				"type": "string"
+				"name": "result",
+				"type": "bytes[]"
+			},
+			{
+				"name": "txStatus",
+				"type": "uint64"
+			},
+			{
+				"name": "signatures",
+				"type": "bytes[]"
 			}
 		],
-		"name": "invokeIndexUpdateWithError",
+		"name": "invokeReceipt",
 		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
+		"payable": true,
+		"stateMutability": "payable",
 		"type": "function"
 	},
 	{
@@ -150,44 +274,12 @@
 	},
 	{
 		"constant": true,
-		"inputs": [
-			{
-				"name": "from",
-				"type": "address"
-			},
-			{
-				"name": "idx",
-				"type": "uint64"
-			}
-		],
-		"name": "getInMessage",
+		"inputs": [],
+		"name": "getRemoteServiceList",
 		"outputs": [
 			{
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"payable": false,
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"constant": true,
-		"inputs": [
-			{
-				"name": "to",
-				"type": "address"
-			},
-			{
-				"name": "idx",
-				"type": "uint64"
-			}
-		],
-		"name": "getOutMessage",
-		"outputs": [
-			{
-				"name": "",
-				"type": "uint256"
+				"name": "fullServiceID",
+				"type": "string[]"
 			}
 		],
 		"payable": false,
@@ -209,7 +301,7 @@
 		"name": "audit",
 		"outputs": [
 			{
-				"name": "",
+				"name": "ok",
 				"type": "bool"
 			}
 		],
@@ -219,21 +311,212 @@
 	},
 	{
 		"constant": true,
+		"inputs": [
+			{
+				"name": "chainID",
+				"type": "string"
+			},
+			{
+				"name": "serviceID",
+				"type": "string"
+			}
+		],
+		"name": "genRemoteFullServiceID",
+		"outputs": [
+			{
+				"name": "fullServiceID",
+				"type": "string"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
 		"inputs": [],
 		"name": "getOuterMeta",
 		"outputs": [
 			{
-				"name": "",
-				"type": "address[]"
+				"name": "outServicePairs",
+				"type": "string[]"
 			},
 			{
-				"name": "",
+				"name": "indices",
 				"type": "uint64[]"
 			}
 		],
 		"payable": false,
 		"stateMutability": "view",
 		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "inServicePair",
+				"type": "string"
+			},
+			{
+				"name": "idx",
+				"type": "uint64"
+			}
+		],
+		"name": "getReceiptMessage",
+		"outputs": [
+			{
+				"name": "result",
+				"type": "bytes[]"
+			},
+			{
+				"name": "typ",
+				"type": "uint64"
+			},
+			{
+				"name": "encrypt",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "srcFullID",
+				"type": "string"
+			},
+			{
+				"name": "destAddr",
+				"type": "address"
+			},
+			{
+				"name": "index",
+				"type": "uint64"
+			},
+			{
+				"name": "typ",
+				"type": "uint64"
+			},
+			{
+				"name": "callFunc",
+				"type": "string"
+			},
+			{
+				"name": "args",
+				"type": "bytes[]"
+			},
+			{
+				"name": "txStatus",
+				"type": "uint64"
+			},
+			{
+				"name": "signatures",
+				"type": "bytes[]"
+			},
+			{
+				"name": "isEncrypt",
+				"type": "bool"
+			}
+		],
+		"name": "invokeInterchain",
+		"outputs": [],
+		"payable": true,
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "getDstRollbackMeta",
+		"outputs": [
+			{
+				"name": "inServicePairs",
+				"type": "string[]"
+			},
+			{
+				"name": "indices",
+				"type": "uint64[]"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "destFullServiceID",
+				"type": "string"
+			},
+			{
+				"name": "funcCall",
+				"type": "string"
+			},
+			{
+				"name": "args",
+				"type": "bytes[]"
+			},
+			{
+				"name": "funcCb",
+				"type": "string"
+			},
+			{
+				"name": "argsCb",
+				"type": "bytes[]"
+			},
+			{
+				"name": "funcRb",
+				"type": "string"
+			},
+			{
+				"name": "argsRb",
+				"type": "bytes[]"
+			},
+			{
+				"name": "isEncrypt",
+				"type": "bool"
+			}
+		],
+		"name": "emitInterchainEvent",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"name": "_bitxhubID",
+				"type": "string"
+			},
+			{
+				"name": "_appchainID",
+				"type": "string"
+			},
+			{
+				"name": "_validators",
+				"type": "address[]"
+			},
+			{
+				"name": "_valThreshold",
+				"type": "uint64"
+			},
+			{
+				"name": "_admins",
+				"type": "address[]"
+			},
+			{
+				"name": "_adminThreshold",
+				"type": "uint64"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "constructor"
 	},
 	{
 		"anonymous": false,
@@ -245,41 +528,31 @@
 			},
 			{
 				"indexed": false,
-				"name": "to",
-				"type": "address"
-			},
-			{
-				"indexed": false,
-				"name": "fid",
-				"type": "address"
-			},
-			{
-				"indexed": false,
-				"name": "tid",
+				"name": "dstFullID",
 				"type": "string"
 			},
 			{
 				"indexed": false,
-				"name": "funcs",
+				"name": "srcFullID",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"name": "func",
 				"type": "string"
 			},
 			{
 				"indexed": false,
 				"name": "args",
-				"type": "string"
+				"type": "bytes[]"
 			},
 			{
 				"indexed": false,
-				"name": "argscb",
-				"type": "string"
-			},
-			{
-				"indexed": false,
-				"name": "argsrb",
-				"type": "string"
+				"name": "hash",
+				"type": "bytes32"
 			}
 		],
-		"name": "throwEvent",
+		"name": "throwInterchainEvent",
 		"type": "event"
 	},
 	{
@@ -287,16 +560,41 @@
 		"inputs": [
 			{
 				"indexed": false,
+				"name": "index",
+				"type": "uint64"
+			},
+			{
+				"indexed": false,
+				"name": "dstFullID",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"name": "srcFullID",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"name": "typ",
+				"type": "uint64"
+			},
+			{
+				"indexed": false,
 				"name": "status",
 				"type": "bool"
 			},
 			{
 				"indexed": false,
-				"name": "data",
-				"type": "string"
+				"name": "result",
+				"type": "bytes[]"
+			},
+			{
+				"indexed": false,
+				"name": "hash",
+				"type": "bytes32"
 			}
 		],
-		"name": "LogInterchainData",
+		"name": "throwReceiptEvent",
 		"type": "event"
 	},
 	{
@@ -304,11 +602,11 @@
 		"inputs": [
 			{
 				"indexed": false,
-				"name": "status",
+				"name": "ok",
 				"type": "bool"
 			}
 		],
-		"name": "LogInterchainStatus",
+		"name": "throwReceiptStatus",
 		"type": "event"
 	}
 ]

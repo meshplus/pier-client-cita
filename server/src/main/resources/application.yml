@@ -3,4 +3,4 @@ cita:
 
 grpc:
   server:
-    port: 9898
+    port: 50052

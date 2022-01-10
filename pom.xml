@@ -15,7 +15,7 @@
     <packaging>pom</packaging>
     <description>Pier plugin for CITA blockchain</description>
     <properties>
-        <java.version>11</java.version>
+        <java.version>8</java.version>
         <grpc.version>1.21.0</grpc.version><!-- CURRENT_GRPC_VERSION -->
     </properties>
 

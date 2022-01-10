@@ -1,132 +1,49 @@
 [
 	{
-		"constant": false,
 		"inputs": [
 			{
-				"name": "id",
-				"type": "string"
-			}
-		],
-		"name": "getBalance",
-		"outputs": [
-			{
-				"name": "",
-				"type": "uint64"
-			}
-		],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "id",
+				"internalType": "string",
+				"name": "destFullServiceID",
 				"type": "string"
 			},
 			{
-				"name": "amount",
-				"type": "uint64"
-			}
-		],
-		"name": "setBalance",
-		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": true,
-		"inputs": [
-			{
-				"name": "self",
-				"type": "string"
-			}
-		],
-		"name": "parseInt",
-		"outputs": [
-			{
-				"name": "_ret",
-				"type": "uint256"
-			}
-		],
-		"payable": false,
-		"stateMutability": "pure",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "sender",
+				"internalType": "string",
+				"name": "func",
 				"type": "string"
 			},
 			{
-				"name": "val",
-				"type": "uint64"
-			}
-		],
-		"name": "interchainRollback",
-		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
+				"internalType": "bytes[]",
+				"name": "args",
+				"type": "bytes[]"
+			},
 			{
-				"name": "sender",
+				"internalType": "string",
+				"name": "funcCb",
 				"type": "string"
 			},
 			{
-				"name": "receiver",
+				"internalType": "bytes[]",
+				"name": "argsCb",
+				"type": "bytes[]"
+			},
+			{
+				"internalType": "string",
+				"name": "funcRb",
 				"type": "string"
 			},
 			{
-				"name": "val",
-				"type": "uint64"
-			}
-		],
-		"name": "interchainCharge",
-		"outputs": [
+				"internalType": "bytes[]",
+				"name": "argsRb",
+				"type": "bytes[]"
+			},
 			{
-				"name": "",
+				"internalType": "bool",
+				"name": "isEncrypt",
 				"type": "bool"
 			}
 		],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "destChainID",
-				"type": "address"
-			},
-			{
-				"name": "destAddr",
-				"type": "string"
-			},
-			{
-				"name": "sender",
-				"type": "string"
-			},
-			{
-				"name": "receiver",
-				"type": "string"
-			},
-			{
-				"name": "amount",
-				"type": "string"
-			}
-		],
-		"name": "transfer",
+		"name": "emitInterchainEvent",
 		"outputs": [],
-		"payable": false,
 		"stateMutability": "nonpayable",
 		"type": "function"
 	}

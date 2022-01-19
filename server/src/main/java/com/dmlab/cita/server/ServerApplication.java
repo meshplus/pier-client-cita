@@ -5,6 +5,7 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -14,8 +15,7 @@ public class ServerApplication {
     private Server server;
     private static final int protoVersion = 4;
 
-    @Value("${grpc.server.port}")
-    private int port;
+    private int port = 50052;
 
 
     private void start() throws IOException {

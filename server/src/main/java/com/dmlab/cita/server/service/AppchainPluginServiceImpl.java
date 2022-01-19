@@ -1,5 +1,6 @@
 package com.dmlab.cita.server.service;
 
+import com.citahub.cita.abi.datatypes.Utf8String;
 import com.citahub.cita.crypto.Credentials;
 import com.citahub.cita.crypto.sm2.SM2;
 import com.citahub.cita.protocol.CITAj;
@@ -65,6 +66,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         try {
             Toml toml = new Toml().read(Files.newInputStream(FileSystems.getDefault().getPath(configPath, "cita.toml")));
             String addr = toml.getString("addr", "https://testnet.citahub.com");
+            System.out.println(addr);
             String name = toml.getString("name", "cita");
             String contractAddress = toml.getString("contract_address");
             Long timeoutHeight = toml.getLong("timeout_height");
@@ -77,6 +79,7 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
             return;
         }
         client = CITAj.build(new HttpService(config.getAddr()));
+        System.out.println(config);
         try {
             version = CITAUtils.getVersion(client);
             chainId = CITAUtils.getChainId(client);
@@ -439,13 +442,17 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
     @Override
     public void getServices(pb.Plugin.Empty request,
                             io.grpc.stub.StreamObserver<pb.Plugin.ServicesResponse> responseObserver) {
-        List<String> localServiceList = null;
+        List<Utf8String> localServiceList = null;
         try {
             localServiceList = broker.getLocalServiceList().send();
         } catch (Exception e) {
             e.printStackTrace();
         }
-        responseObserver.onNext(ServicesResponse.newBuilder().addAllService(localServiceList).build());
+        List<String> services = new ArrayList<>();
+        localServiceList.forEach(service ->{
+            services.add(service.getValue());
+        });
+        responseObserver.onNext(ServicesResponse.newBuilder().addAllService(services).build());
         responseObserver.onCompleted();
     }
 

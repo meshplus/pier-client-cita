@@ -12,7 +12,7 @@
     <name>grpc</name>
     <description>Demo project for Spring Boot</description>
     <properties>
-        <java.version>11</java.version>
+        <java.version>8</java.version>
         <grpc.version>1.21.0</grpc.version><!-- CURRENT_GRPC_VERSION -->
         <protobuf.version>3.7.1</protobuf.version>
     </properties>

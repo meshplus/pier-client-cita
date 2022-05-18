@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package pb;
+
+import "basic.proto";
+
+// Inter-blockchain Transfer Protocol
+message IBTP {
+    enum Type {
+        INTERCHAIN = 0;
+        RECEIPT_SUCCESS = 1;
+        RECEIPT_FAILURE = 2;
+        RECEIPT_ROLLBACK = 3;
+    }
+
+    enum Category {
+        REQUEST = 0;
+        RESPONSE = 1;
+        UNKNOWN = 2;
+    }
+
+    // ID of sending chain and sending service
+    string from = 1;
+    // ID of receiving chain and receiving service
+    string to = 2;
+    // Index of inter-chain transaction
+    uint64 index = 3;
+    // inter-chain transaction type
+    Type type = 4;
+    // timeout height of inter-chain transaction on BitXHub
+    int64 timeoutHeight = 5;
+    // Proof of inter-chain transactions
+    bytes proof = 6;
+    // Encoded content used by inter-chain
+    bytes payload = 7;
+    // info about other txs in the same group
+    StringUint64Map group = 8;
+    // Message version
+    string version = 9;
+    // Self-defined fields used by app-chain
+    bytes extra = 10;
+}
+
+message payload {
+    bool encrypted = 1;
+    bytes content = 2;
+    bytes hash = 3;
+}
+
+message content {
+    string func = 1;
+    repeated bytes args = 2;
+}
+
+message result {
+    repeated bytes data = 1;
+}
+
+message IBTPs {
+    repeated IBTP ibtps = 1;
+}

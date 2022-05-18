@@ -1,145 +1,50 @@
 [
 	{
-		"constant": false,
 		"inputs": [
 			{
-				"name": "destChainID",
-				"type": "address"
-			},
-			{
-				"name": "destAddr",
+				"internalType": "string",
+				"name": "destFullServiceID",
 				"type": "string"
 			},
 			{
-				"name": "key",
+				"internalType": "string",
+				"name": "func",
 				"type": "string"
 			},
 			{
-				"name": "value",
-				"type": "string"
-			}
-		],
-		"name": "set",
-		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
+				"internalType": "bytes[]",
+				"name": "args",
+				"type": "bytes[]"
+			},
 			{
-				"name": "key",
+				"internalType": "string",
+				"name": "funcCb",
 				"type": "string"
-			}
-		],
-		"name": "interchainGet",
-		"outputs": [
+			},
 			{
-				"name": "",
+				"internalType": "bytes[]",
+				"name": "argsCb",
+				"type": "bytes[]"
+			},
+			{
+				"internalType": "string",
+				"name": "funcRb",
+				"type": "string"
+			},
+			{
+				"internalType": "bytes[]",
+				"name": "argsRb",
+				"type": "bytes[]"
+			},
+			{
+				"internalType": "bool",
+				"name": "isEncrypt",
 				"type": "bool"
-			},
-			{
-				"name": "",
-				"type": "string"
 			}
 		],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "key",
-				"type": "string"
-			},
-			{
-				"name": "value",
-				"type": "string"
-			}
-		],
-		"name": "setData",
+		"name": "emitInterchainEvent",
 		"outputs": [],
-		"payable": false,
 		"stateMutability": "nonpayable",
 		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "key",
-				"type": "string"
-			},
-			{
-				"name": "value",
-				"type": "string"
-			}
-		],
-		"name": "interchainSet",
-		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "destChainID",
-				"type": "address"
-			},
-			{
-				"name": "destAddr",
-				"type": "string"
-			},
-			{
-				"name": "key",
-				"type": "string"
-			}
-		],
-		"name": "get",
-		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "key",
-				"type": "string"
-			}
-		],
-		"name": "getData",
-		"outputs": [
-			{
-				"name": "",
-				"type": "string"
-			}
-		],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": false,
-				"name": "key",
-				"type": "string"
-			},
-			{
-				"indexed": false,
-				"name": "value",
-				"type": "string"
-			}
-		],
-		"name": "LogDataExists",
-		"type": "event"
 	}
 ]

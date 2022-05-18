@@ -1,58 +1,48 @@
 package com.dmlab.cita.server.service;
 
-import com.citahub.cita.abi.EventEncoder;
-import com.citahub.cita.abi.EventValues;
-import com.citahub.cita.abi.FunctionEncoder;
-import com.citahub.cita.abi.TypeReference;
-import com.citahub.cita.abi.datatypes.Address;
-import com.citahub.cita.abi.datatypes.Event;
-import com.citahub.cita.abi.datatypes.Function;
-import com.citahub.cita.abi.datatypes.Utf8String;
-import com.citahub.cita.abi.datatypes.generated.Uint64;
 import com.citahub.cita.crypto.Credentials;
 import com.citahub.cita.crypto.sm2.SM2;
-import com.citahub.cita.crypto.sm2.SM2KeyPair;
 import com.citahub.cita.protocol.CITAj;
 import com.citahub.cita.protocol.core.DefaultBlockParameter;
 import com.citahub.cita.protocol.core.RemoteCall;
-import com.citahub.cita.protocol.core.Request;
-import com.citahub.cita.protocol.core.methods.request.AppFilter;
 import com.citahub.cita.protocol.core.methods.response.*;
 import com.citahub.cita.protocol.http.HttpService;
 import com.citahub.cita.tuples.generated.Tuple2;
-import com.citahub.cita.tx.Contract;
+import com.citahub.cita.tuples.generated.Tuple3;
 import com.citahub.cita.tx.RawTransactionManager;
 import com.citahub.cita.tx.TransactionManager;
-import com.citahub.cita.utils.HexUtil;
 import com.dmlab.cita.server.config.CitaConfig;
 import com.dmlab.cita.server.contracts.Broker;
-import com.dmlab.cita.server.contracts.DataSwap;
 import com.dmlab.cita.server.utils.CITAUtils;
-import com.dmlab.cita.server.utils.FunctionUtils;
 import com.dmlab.cita.server.utils.IBTPUtils;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.moandjiezana.toml.Toml;
-import io.grpc.stub.StreamObserver;
+import io.grpc.stub.*;
 import io.reactivex.Flowable;
+import io.reactivex.functions.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.web3j.crypto.Hash;
 import pb.AppchainPluginGrpc.AppchainPluginImplBase;
 import pb.*;
+import pb.Ibtp.*;
+import pb.Plugin.*;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
+
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 
 @GrpcService
 @Component
@@ -62,28 +52,25 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
     private static String TYPE = "cita";
     private CITAj client;
     private CitaConfig config;
-    private String pierId;
     private int version;
     private BigInteger chainId;
 
-    private static BlockingQueue<IBTP> eventC = new ArrayBlockingQueue<IBTP>(1024);
+    private static BlockingQueue<Ibtp.IBTP> eventC = new ArrayBlockingQueue<Ibtp.IBTP>(1024);
     private Broker broker;
-    private DataSwap dataSwap;
 
 
     @Override
     public void initialize(InitializeRequest request, StreamObserver<Empty> responseObserver) {
         String configPath = request.getConfigPath();
-        pierId = request.getPierId();
         try {
-            Toml toml = new Toml().read(Files.newInputStream(Path.of(configPath, "cita.toml")));
+            Toml toml = new Toml().read(Files.newInputStream(FileSystems.getDefault().getPath(configPath, "cita.toml")));
             String addr = toml.getString("addr", "https://testnet.citahub.com");
             String name = toml.getString("name", "cita");
             String contractAddress = toml.getString("contract_address");
-            String dataSwapAddress = toml.getString("data_swap_address");
+            Long timeoutHeight = toml.getLong("timeout_height");
             String algo = toml.getString("algo");
             String key = toml.getString("key");
-            config = new CitaConfig(addr, name, contractAddress, dataSwapAddress, algo, key);
+            config = new CitaConfig(addr, name, contractAddress, algo, key, timeoutHeight);
         } catch (IOException e) {
             e.printStackTrace();
             responseObserver.onError(e);
@@ -108,7 +95,6 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
 
 
         broker = Broker.load(config.getContractAddress(), client, citaTxManager);
-        dataSwap = DataSwap.load(config.getDataSwapAddress(), client, citaTxManager);
 
         responseObserver.onNext(Empty.getDefaultInstance());
         responseObserver.onCompleted();
@@ -117,18 +103,6 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
     @Override
     public void start(Empty request, StreamObserver<Empty> responseObserver) {
         Runnable runnable = () -> {
-            final Event event = new Event("throwEvent",
-                    Arrays.<TypeReference<?>>asList(),
-                    Arrays.<TypeReference<?>>asList(new TypeReference<Uint64>() {
-                    }, new TypeReference<Address>() {
-                    }, new TypeReference<Address>() {
-                    }, new TypeReference<Utf8String>() {
-                    }, new TypeReference<Utf8String>() {
-                    }, new TypeReference<Utf8String>() {
-                    }, new TypeReference<Utf8String>() {
-                    }, new TypeReference<Utf8String>() {
-                    }));
-            String topic = EventEncoder.encode(event);
             BigInteger startBlock = getCurBlockNumber();
 
             while (true) {
@@ -145,44 +119,37 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
                 }
 
                 log.info("start block: {}, end block: {}", startBlock.toString(), endBlock.toString());
-                AppFilter filter = new AppFilter(
-                        DefaultBlockParameter.valueOf(startBlock),
-                        DefaultBlockParameter.valueOf(endBlock),
-                        broker.getContractAddress());
-                filter.addSingleTopic(topic);
-
-                try {
-                    AppLog appLog = client.appGetLogs(filter).send();
-
-                    for (AppLog.LogResult logResult : appLog.getLogs()) {
-                        if (logResult instanceof AppLog.LogObject) {
-                            Log eventLog = ((AppLog.LogObject) logResult).get();
-                            EventValues eventValues = Contract.staticExtractEventParameters(event, eventLog);
-                            Broker.ThrowEventEventResponse typedResponse = new Broker.ThrowEventEventResponse();
-                            typedResponse.index = (BigInteger) eventValues.getNonIndexedValues().get(0).getValue();
-                            typedResponse.to = (String) eventValues.getNonIndexedValues().get(1).getValue();
-                            typedResponse.fid = (String) eventValues.getNonIndexedValues().get(2).getValue();
-                            typedResponse.tid = (String) eventValues.getNonIndexedValues().get(3).getValue();
-                            typedResponse.funcs = (String) eventValues.getNonIndexedValues().get(4).getValue();
-                            typedResponse.args = (String) eventValues.getNonIndexedValues().get(5).getValue();
-                            typedResponse.argscb = (String) eventValues.getNonIndexedValues().get(6).getValue();
-                            typedResponse.argsrb = (String) eventValues.getNonIndexedValues().get(7).getValue();
-
-                            log.info("accept event: {} ", typedResponse);
-                            try {
-                                eventC.put(IBTPUtils.convertFromEvent(typedResponse, pierId));
-                            } catch (Exception e) {
-                                log.info(e.getMessage());
-                            }
-
-                            startBlock = endBlock.add(BigInteger.ONE);
+                Flowable<Broker.ThrowInterchainEventEventResponse> throwInterchainEventEventResponseFlowable = broker.
+                        throwInterchainEventEventFlowable(DefaultBlockParameter.valueOf(startBlock), DefaultBlockParameter.valueOf(endBlock));
+                throwInterchainEventEventResponseFlowable.blockingSubscribe(new Consumer<Broker.ThrowInterchainEventEventResponse>() {
+                    @Override
+                    public void accept(Broker.ThrowInterchainEventEventResponse throwInterchainEventEventResponse) throws Exception {
+                        try {
+                            eventC.put(convertFromEvent(throwInterchainEventEventResponse));
+                        } catch (Exception e) {
+                            log.info(e.getMessage());
                         }
                     }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                });
+
+
+                Flowable<Broker.ThrowReceiptEventEventResponse> throwReceiptEventEventResponseFlowable = broker.throwReceiptEventEventFlowable(DefaultBlockParameter.valueOf(startBlock), DefaultBlockParameter.valueOf(endBlock));
+                throwReceiptEventEventResponseFlowable.blockingSubscribe(new Consumer<Broker.ThrowReceiptEventEventResponse>() {
+                    @Override
+                    public void accept(Broker.ThrowReceiptEventEventResponse throwReceiptEventEventResponse) throws Exception {
+                        try {
+                            eventC.put(convertFromEvent(throwReceiptEventEventResponse));
+                        } catch (Exception e) {
+                            log.info(e.getMessage());
+                        }
+                    }
+                });
+
+
+                startBlock = endBlock.add(BigInteger.ONE);
             }
         };
+
 
         Thread thread = new Thread(runnable);
         thread.start();
@@ -190,6 +157,83 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         responseObserver.onNext(Empty.newBuilder().build());
         responseObserver.onCompleted();
     }
+
+    private IBTP convertFromEvent(Broker.ThrowReceiptEventEventResponse ev) {
+        String servicePair = ev.srcFullID + "-" + ev.dstFullID;
+        Tuple3<List<byte[]>, BigInteger, Boolean> out = null;
+        try {
+            out = broker.getReceiptMessage(servicePair, ev.index).send();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        log.info("listen receipt ibtp service_pair:{}, idx:{}, out{}", servicePair, ev.index.intValue(), out);
+
+        result.Builder builder = result.newBuilder();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        for (byte[] bytes : out.getValue1()) {
+            builder.addData(ByteString.copyFrom(bytes));
+            try {
+                output.write(bytes);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        result res = builder.build();
+        payload pay = payload.newBuilder().setEncrypted(out.getValue3()).setContent(res.toByteString()).setHash(ByteString.copyFrom(Hash.sha3(output.toByteArray()))).build();
+
+        IBTP ibtp = IBTP.newBuilder()
+                .setFrom(ev.srcFullID)
+                .setTo(ev.dstFullID)
+                .setIndex(ev.index.intValue())
+                .setPayload(pay.toByteString())
+                .setProof(ByteString.copyFromUtf8("1"))
+                .setTimeoutHeight(0).build();
+        return ibtp;
+    }
+
+    private IBTP convertFromEvent(Broker.ThrowInterchainEventEventResponse ev) {
+        String servicePair = ev.srcFullID + "-" + ev.dstFullID;
+        Tuple3<String, List<byte[]>, Boolean> out = null;
+        try {
+            out = broker.getOutMessage(servicePair, ev.index).send();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        log.info("listen interchain ibtp service_pair:{}, idx:{}, out{}", servicePair, ev.index.intValue(), out);
+        assert out != null;
+        ev.func = out.getValue1();
+        ev.args = out.getValue2();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] funcData = ev.func.getBytes(StandardCharsets.UTF_8);
+        List<ByteString> argsByteString = new ArrayList<>();
+        try {
+            output.write(funcData);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        for (byte[] arg : ev.args) {
+            try {
+                output.write(arg);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            argsByteString.add(ByteString.copyFrom(arg));
+        }
+        ev.hash = Hash.sha3(output.toByteArray());
+
+        content cont = content.newBuilder().setFunc(ev.func).addAllArgs(argsByteString).build();
+        payload pay = payload.newBuilder().setContent(cont.toByteString()).setEncrypted(out.getValue3()).setHash(ByteString.copyFrom(ev.hash)).build();
+
+        IBTP ibtp = IBTP.newBuilder()
+                .setFrom(ev.srcFullID)
+                .setTo(ev.dstFullID)
+                .setIndex(ev.index.intValue())
+                .setPayload(pay.toByteString())
+                .setProof(ByteString.copyFromUtf8("1"))
+                .setTimeoutHeight(config.getTimeoutHeight()).build();
+        return ibtp;
+    }
+
 
     private BigInteger getCurBlockNumber() {
         while (true) {
@@ -211,9 +255,15 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         super.stop(request, responseObserver);
     }
 
+    @Override
+    public void getUpdateMeta(pb.Plugin.Empty request,
+                              io.grpc.stub.StreamObserver<pb.Plugin.UpdateMeta> responseObserver) {
+        responseObserver.onCompleted();
+    }
 
     @Override
-    public void getIBTP(Empty request, StreamObserver<IBTP> responseObserver) {
+    public void getIBTPCh(pb.Plugin.Empty request,
+                          io.grpc.stub.StreamObserver<pb.Ibtp.IBTP> responseObserver) {
         while (true) {
             try {
                 IBTP ibtp = eventC.take();
@@ -229,241 +279,208 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
     }
 
     @Override
-    public void submitIBTP(IBTP request, StreamObserver<SubmitIBTPResponse> responseObserver) {
-        SubmitIBTPResponse sir = SubmitIBTPResponse.getDefaultInstance();
-        payload payload = null;
-        content content = null;
+    public void submitIBTP(pb.Plugin.SubmitIBTPRequest request,
+                           io.grpc.stub.StreamObserver<pb.Plugin.SubmitIBTPResponse> responseObserver) {
+        SubmitIBTPResponse sir = SubmitIBTPResponse.newBuilder().setStatus(true).build();
+        TransactionReceipt transactionReceipt;
         try {
-            payload = pb.payload.parseFrom(request.getPayload());
-            content = pb.content.parseFrom(payload.getContent());
-        } catch (InvalidProtocolBufferException e) {
+            transactionReceipt = invokeInterchain(request);
+        } catch (Exception e) {
             e.printStackTrace();
-            responseObserver.onError(e);
-            return;
-        }
-
-        log.info("ibtp: {}", request.toString());
-        log.info("content: {}", content.toString());
-
-        if (IBTPUtils.category(request) == IBTP.Category.UNKNOWN) {
-            responseObserver.onError(new IllegalArgumentException("invalid ibtp category"));
-            return;
-        }
-
-        if (IBTPUtils.category(request) == IBTP.Category.RESPONSE && content.getFunc().trim().equals("")) {
-            TransactionReceipt transactionReceipt = null;
-            try {
-                transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex(), IBTPUtils.category(request) == IBTP.Category.REQUEST);
-            } catch (Exception e) {
-                e.printStackTrace();
-                responseObserver.onError(e);
-                return;
-            }
-            boolean status = StringUtils.hasLength(transactionReceipt.getErrorMessage());
-            if (status) {
-                responseObserver.onError(new IllegalStateException("update index for ibtp failed" + request.getFrom() + "-" + request.getTo() + "-" + request.getIndex()));
-                return;
-            }
-            sir = sir.toBuilder().setStatus(true).build();
+            sir.toBuilder().setStatus(false).setMessage(e.getMessage()).build();
             responseObserver.onNext(sir);
             responseObserver.onCompleted();
             return;
         }
-
-
-        Function func = null;
-        try {
-            func = FunctionUtils.packFunc(content.getFunc(), content.getArgsList());
-        } catch (Exception e) {
-            TransactionReceipt transactionReceipt = null;
-            try {
-                transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex(), IBTPUtils.category(request) == IBTP.Category.REQUEST);
-            } catch (Exception t) {
-                e.printStackTrace();
-                responseObserver.onError(t);
-                log.error("invokeInterchainWithError Exception: {}", t.toString());
-                return;
-            }
-            boolean status = StringUtils.hasLength(transactionReceipt.getErrorMessage());
-            log.info("invokeInterchainWithError status: {}", status);
-            if (status) {
-                responseObserver.onError(new IllegalStateException("update index for ibtp failed" + request.getFrom() + "-" + request.getTo() + "-" + request.getIndex()));
-                return;
-            }
-            sir = sir.toBuilder().setStatus(true).build();
-            responseObserver.onNext(sir);
-            responseObserver.onCompleted();
-            return;
-        }
-        String funcEncoder = FunctionEncoder.encode(func);
-
-        log.info("func encode:{}" + funcEncoder);
-        TransactionReceipt receipt = null;
-        try {
-            receipt = invokeInterchain(request.getFrom(), request.getIndex(), content.getDstContractId(), IBTPUtils.category(request), HexUtil.hexToBytes(funcEncoder.substring(2)));
-        } catch (Exception e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
-            log.error("invokeInterchain Exception: {}", e.toString());
-            return;
-        }
-
-        boolean callBackStatus = false;
-        byte[][] result = new byte[0][];
-        boolean status = StringUtils.hasLength(receipt.getErrorMessage());
-        log.info("invokeInterchain status: {}", !status);
+        boolean status = StringUtils.hasLength(transactionReceipt.getErrorMessage());
         if (!status) {
-            Log log = receipt.getLogs().get(receipt.getLogs().size() - 1);
-            try {
-                result = FunctionUtils.unPackFunc(content.getFunc(), log.getData());
-                callBackStatus = true;
-            } catch (Exception e) {
-                e.printStackTrace();
-                responseObserver.onError(e);
-                return;
-            }
-        } else {
-            TransactionReceipt transactionReceipt = null;
-            try {
-                transactionReceipt = invokeInterchainWithError(request.getFrom(), request.getIndex(), IBTPUtils.category(request) == IBTP.Category.REQUEST);
-            } catch (Exception e) {
-                e.printStackTrace();
-                responseObserver.onError(e);
-                return;
-            }
-            status = StringUtils.hasLength(transactionReceipt.getErrorMessage());
-            if (status) {
-                responseObserver.onError(new IllegalStateException("invalid index for ibtp:" + request.getFrom() + "-" + request.getTo() + "-" + request.getIndex()));
-                return;
-            }
-            sir = sir.toBuilder().setStatus(false).setMessage("InvokeInterchain tx execution failed").build();
-        }
-
-
-        if (IBTPUtils.category(request) == IBTP.Category.RESPONSE) {
+            sir.toBuilder().setStatus(false).setMessage(transactionReceipt.getErrorMessage()).build();
             responseObserver.onNext(sir);
             responseObserver.onCompleted();
             return;
         }
-
-        IBTP callBack = null;
-        try {
-            callBack = generateCallBack(request, result, callBackStatus);
-        } catch (InvalidProtocolBufferException e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
-            return;
-        }
-        sir = sir.toBuilder().setResult(callBack).setStatus(callBackStatus).build();
         responseObserver.onNext(sir);
         responseObserver.onCompleted();
     }
 
-
     @Override
-    public void rollbackIBTP(pb.RollbackIBTPRequest request, StreamObserver<pb.RollbackIBTPResponse> responseObserver) {
-        RollbackIBTPResponse rollbackIBTPResponse = RollbackIBTPResponse.getDefaultInstance();
-        payload payload = null;
-        content content = null;
+    public void submitReceipt(pb.Plugin.SubmitReceiptRequest request,
+                              io.grpc.stub.StreamObserver<pb.Plugin.SubmitIBTPResponse> responseObserver) {
+        SubmitIBTPResponse sir = SubmitIBTPResponse.newBuilder().setStatus(true).build();
+        TransactionReceipt transactionReceipt;
         try {
-            payload = pb.payload.parseFrom(request.getIbtp().getPayload());
-            content = pb.content.parseFrom(payload.getContent());
-        } catch (InvalidProtocolBufferException e) {
+            transactionReceipt = invokeReceiptInterchain(request);
+        } catch (Exception e) {
             e.printStackTrace();
-            responseObserver.onError(e);
-            return;
-        }
-
-        if (!content.getFunc().equals("interchainCharge")) {
-            responseObserver.onNext(null);
+            sir.toBuilder().setStatus(false).setMessage(e.getMessage()).build();
+            responseObserver.onNext(sir);
             responseObserver.onCompleted();
             return;
         }
-
-        TransactionReceipt transactionReceipt = null;
-        try {
-            Function func = FunctionUtils.packFunc(content.getRollback(), content.getArgsRbList());
-            String encode = FunctionEncoder.encode(func);
-            transactionReceipt = invokeInterchain(request.getIbtp().getTo(), request.getIbtp().getIndex(), content.getSrcContractId(), IBTP.Category.RESPONSE, HexUtil.hexToBytes(encode.substring(2)));
-        } catch (Exception e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
-            return;
-
-        }
         boolean status = StringUtils.hasLength(transactionReceipt.getErrorMessage());
-        if (status) {
-            rollbackIBTPResponse = rollbackIBTPResponse.toBuilder().setStatus(false).setMessage("wrong contract doesn't emit log event").build();
+        if (!status) {
+            sir.toBuilder().setStatus(false).setMessage(transactionReceipt.getErrorMessage()).build();
+            responseObserver.onNext(sir);
+            responseObserver.onCompleted();
+            return;
         }
-        responseObserver.onNext(rollbackIBTPResponse);
+        responseObserver.onNext(sir);
         responseObserver.onCompleted();
     }
 
     @Override
-    public void increaseInMeta(pb.IBTP request, StreamObserver<pb.IBTP> responseObserver) {
-        IBTP ibtp = null;
-        try {
-            ibtp = generateCallBack(request, null, false);
-        } catch (InvalidProtocolBufferException e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
+    public void getOutMessage(pb.Plugin.GetMessageRequest request,
+                              io.grpc.stub.StreamObserver<pb.Ibtp.IBTP> responseObserver) {
+        String[] servicePair = request.getServicePair().split("-");
+        if (servicePair.length != 2) {
+            responseObserver.onError(new Exception("parse service pair fail:" + request.getServicePair()));
+            responseObserver.onCompleted();
             return;
         }
+        Broker.ThrowInterchainEventEventResponse ev = new Broker.ThrowInterchainEventEventResponse();
+        ev.srcFullID = servicePair[0];
+        ev.dstFullID = servicePair[1];
+        ev.index = BigInteger.valueOf(request.getIdx());
+        Tuple3<String, List<byte[]>, Boolean> out = null;
         try {
-            TransactionReceipt transactionReceipt = invokeInterchainWithError(ibtp.getFrom(), ibtp.getIndex(), IBTPUtils.category(request) == IBTP.Category.REQUEST);
-            boolean status = StringUtils.hasLength(transactionReceipt.getErrorMessage());
-            if (status) {
-                responseObserver.onError(new IllegalStateException("invalid index for ibtp:" + request.getFrom() + "-" + request.getTo() + "-" + request.getIndex()));
-                return;
-            }
+            out = broker.getOutMessage(request.getServicePair(), BigInteger.valueOf(request.getIdx())).send();
         } catch (Exception e) {
             e.printStackTrace();
-            responseObserver.onError(e);
-            return;
         }
+        log.info("get out ibtp service_pair:{}, idx:{}, out{}", request.getServicePair(), request.getIdx(), out);
+        assert out != null;
+        ev.func = out.getValue1();
+        ev.args = out.getValue2();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] funcData = ev.func.getBytes(StandardCharsets.UTF_8);
+        List<ByteString> argsByteString = new ArrayList<>();
+        try {
+            output.write(funcData);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        for (byte[] arg : ev.args) {
+            try {
+                output.write(arg);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            argsByteString.add(ByteString.copyFrom(arg));
+        }
+        ev.hash = Hash.sha3(output.toByteArray());
+
+        content cont = content.newBuilder().setFunc(ev.func).addAllArgs(argsByteString).build();
+        payload pay = payload.newBuilder().setContent(cont.toByteString()).setEncrypted(out.getValue3()).setHash(ByteString.copyFrom(ev.hash)).build();
+
+        IBTP ibtp = IBTP.newBuilder()
+                .setFrom(ev.srcFullID)
+                .setTo(ev.dstFullID)
+                .setIndex(request.getIdx())
+                .setPayload(pay.toByteString())
+                .setProof(ByteString.copyFromUtf8("1"))
+                .setTimeoutHeight(config.getTimeoutHeight()).build();
         responseObserver.onNext(ibtp);
         responseObserver.onCompleted();
     }
 
-    @Override
-    public void getOutMessage(GetOutMessageRequest request, StreamObserver<IBTP> responseObserver) {
-        BigInteger block = null;
+    /**
+     *
+     */
+    public void getReceiptMessage(pb.Plugin.GetMessageRequest request,
+                                  io.grpc.stub.StreamObserver<pb.Ibtp.IBTP> responseObserver) {
+        Tuple3<List<byte[]>, BigInteger, Boolean> out = null;
         try {
-            block = broker.getOutMessage(request.getTo(), BigInteger.valueOf(request.getIdx())).send();
-            log.info("get missing ibtp to:{}, idx:{}, height:{}", request.getTo(), request.getIdx(), block.intValue());
-            Flowable<Broker.ThrowEventEventResponse> flowable = broker.throwEventEventFlowable(DefaultBlockParameter.valueOf(block), DefaultBlockParameter.valueOf(block));
-            Broker.ThrowEventEventResponse throwEventEventResponse = flowable.blockingFirst();
-            log.info("throwEventEventResponse to:{}, idx:{}", throwEventEventResponse.to, throwEventEventResponse.index.intValue());
-
-            IBTP ibtp = null;
-            if (throwEventEventResponse.to.equalsIgnoreCase(request.getTo()) && throwEventEventResponse.index.longValue() == request.getIdx()) {
-                try {
-                    ibtp = IBTPUtils.convertFromEvent(throwEventEventResponse, pierId);
-                    responseObserver.onNext(ibtp);
-                    responseObserver.onCompleted();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    responseObserver.onError(e);
-                }
-            }
+            out = broker.getReceiptMessage(request.getServicePair(), BigInteger.valueOf(request.getIdx())).send();
         } catch (Exception e) {
             e.printStackTrace();
-            responseObserver.onError(e);
         }
-    }
+        log.info("get missing receipt ibtp service_pair:{}, idx:{}, out{}", request.getServicePair(), request.getIdx(), out);
 
-    @Override
-    public void getInMessage(GetInMessageRequest request, StreamObserver<GetInMessageResponse> responseObserver) {
-        BigInteger inBlock = null;
-        try {
-            inBlock = broker.getInMessage(request.getFrom(), BigInteger.valueOf(request.getIdx())).send();
-        } catch (Exception e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
+        result.Builder builder = result.newBuilder();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        for (byte[] bytes : out.getValue1()) {
+            builder.addData(ByteString.copyFrom(bytes));
+            try {
+                output.write(bytes);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        result res = builder.build();
+        payload pay = payload.newBuilder().setEncrypted(out.getValue3()).setContent(res.toByteString()).setHash(ByteString.copyFrom(Hash.sha3(output.toByteArray()))).build();
+
+        String[] servicePair = request.getServicePair().split("-");
+        if (servicePair.length != 2) {
+            responseObserver.onError(new Exception("parse service pair fail:" + request.getServicePair()));
             responseObserver.onCompleted();
             return;
         }
-        responseObserver.onNext(GetInMessageResponse.newBuilder().addResult(ByteString.copyFrom(inBlock.toByteArray())).build());
+
+        IBTP ibtp = IBTP.newBuilder()
+                .setFrom(servicePair[0])
+                .setTo(servicePair[1])
+                .setIndex(request.getIdx())
+                .setPayload(pay.toByteString())
+                .setProof(ByteString.copyFromUtf8("1"))
+                .setTimeoutHeight(0).build();
+        responseObserver.onNext(ibtp);
+        responseObserver.onCompleted();
+
+    }
+
+
+    @Override
+    public void getDstRollbackMeta(pb.Plugin.Empty request,
+                                   io.grpc.stub.StreamObserver<pb.Plugin.GetMetaResponse> responseObserver) {
+        Future<Tuple2<List<String>, List<BigInteger>>> tuple2Future = broker.getDstRollbackMeta().sendAsync();
+        getMeta(responseObserver, tuple2Future);
+    }
+
+    @Override
+    public void getServices(pb.Plugin.Empty request,
+                            io.grpc.stub.StreamObserver<pb.Plugin.ServicesResponse> responseObserver) {
+        List<String> localServiceList = null;
+        try {
+            localServiceList = broker.getLocalServiceList().send();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        responseObserver.onNext(ServicesResponse.newBuilder().addAllService(localServiceList).build());
+        responseObserver.onCompleted();
+    }
+
+    /**
+     *
+     */
+    @Override
+    public void getChainID(pb.Plugin.Empty request,
+                           io.grpc.stub.StreamObserver<pb.Plugin.ChainIDResponse> responseObserver) {
+        Tuple2<String, String> chainID = null;
+        try {
+            chainID = broker.getChainID().send();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        responseObserver.onNext(ChainIDResponse.newBuilder().setBxhID(chainID.getValue1()).setAppchainID(chainID.getValue2()).build());
+        responseObserver.onCompleted();
+
+
+    }
+
+    /**
+     *
+     */
+    @Override
+    public void getAppchainInfo(pb.Plugin.ChainInfoRequest request,
+                                io.grpc.stub.StreamObserver<pb.Plugin.ChainInfoResponse> responseObserver) {
+        Tuple3<String, byte[], String> appchainInfo = null;
+        try {
+            appchainInfo = broker.getAppchainInfo(request.getChainID()).send();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        responseObserver.onNext(ChainInfoResponse.newBuilder()
+                .setBroker(appchainInfo.getValue1()).setTrustedRoot(ByteString.copyFrom(appchainInfo.getValue2())).setRuleAddr(appchainInfo.getValue3()).build());
         responseObserver.onCompleted();
     }
 
@@ -505,110 +522,6 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
         responseObserver.onCompleted();
     }
 
-    @Override
-    public void commitCallback(IBTP request, StreamObserver<Empty> responseObserver) {
-        super.commitCallback(request, responseObserver);
-    }
-
-    @Override
-    public void getReceipt(IBTP request, StreamObserver<IBTP> responseObserver) {
-        payload payload = null;
-        content content = null;
-        try {
-            payload = pb.payload.parseFrom(request.getPayload());
-            content = pb.content.parseFrom(payload.getContent());
-        } catch (InvalidProtocolBufferException e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
-            return;
-        }
-
-        Future<BigInteger> bigIntegerFuture = broker.getInMessage(request.getFrom(), BigInteger.valueOf(request.getIndex())).sendAsync();
-        BigInteger blockNum = null;
-        try {
-            blockNum = bigIntegerFuture.get();
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
-            return;
-        }
-        boolean callBackStatus = false;
-        byte[][] result = new byte[0][];
-        Future<AppBlock> appBlockFuture = client.appGetBlockByNumber(DefaultBlockParameter.valueOf(blockNum), true).sendAsync();
-        try {
-            pb.content finalContent = content;
-            for (AppBlock.TransactionObject tx : appBlockFuture.get().getBlock().getBody().getTransactions()) {
-                Future<AppGetTransactionReceipt> appGetTransactionReceiptFuture = client.appGetTransactionReceipt(tx.getHash()).sendAsync();
-                TransactionReceipt transactionReceipt = null;
-                try {
-                    transactionReceipt = appGetTransactionReceiptFuture.get().getTransactionReceipt();
-                } catch (Exception e) {
-                    responseObserver.onError(e);
-                    return;
-                }
-                if (config.getContractAddress().equalsIgnoreCase(transactionReceipt.getTo())) {
-                    if (transactionReceipt.getLogs().size() == 1) {
-                        Log log = transactionReceipt.getLogs().get(transactionReceipt.getLogs().size() - 1);
-                        try {
-                            result = FunctionUtils.unPackFunc(finalContent.getFunc(), log.getData());
-                            callBackStatus = true;
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            responseObserver.onError(e);
-                            return;
-                        }
-                    }
-
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
-        }
-        IBTP callBack = null;
-        try {
-            callBack = generateCallBack(request, result, callBackStatus);
-        } catch (InvalidProtocolBufferException e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
-            return;
-        }
-        responseObserver.onNext(callBack);
-        responseObserver.onCompleted();
-    }
-
-
-    @Override
-    public void checkHash(CheckHashRequest request, StreamObserver<CheckHashResponse> responseObserver) {
-        long currentHeight;
-        boolean isExist = false;
-        try {
-            currentHeight = client.appBlockNumber()
-                    .send().getBlockNumber().longValue();
-
-            long validUntilBlock = currentHeight + 80;
-            String nonce = CITAUtils.getNonce();
-            RemoteCall<TransactionReceipt> receiptRemoteCall = dataSwap.getData(request.getHash(), BigInteger.ZERO, 10000000L, nonce, validUntilBlock, version, chainId, "");
-            Future<TransactionReceipt> transactionReceiptFuture = receiptRemoteCall.sendAsync();
-            TransactionReceipt transactionReceipt = transactionReceiptFuture.get();
-            log.info("tx hash: {}", transactionReceipt.getTransactionHash());
-            List<DataSwap.LogDataExistsEventResponse> logs = dataSwap.getLogDataExistsEvents(transactionReceipt);
-
-            if (!logs.isEmpty()) {
-                isExist = true;
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            responseObserver.onError(e);
-            return;
-        }
-
-        responseObserver.onNext(CheckHashResponse.newBuilder()
-                .setRes(isExist)
-                .build());
-        responseObserver.onCompleted();
-    }
 
     @Override
     public void name(Empty request, StreamObserver<NameResponse> responseObserver) {
@@ -623,71 +536,55 @@ public class AppchainPluginServiceImpl extends AppchainPluginImplBase {
     }
 
 
-    public TransactionReceipt invokeInterchain(
-            String srcChainMethod, Long index, String destAddr, IBTP.Category category, byte[] bizCallData) throws Exception {
+    public TransactionReceipt invokeInterchain(SubmitIBTPRequest request) throws Exception {
         long currentHeight = client.appBlockNumber()
                 .send().getBlockNumber().longValue();
         long validUntilBlock = currentHeight + 80;
         String nonce = CITAUtils.getNonce();
-        RemoteCall<TransactionReceipt> transactionReceiptRemoteCall = broker.invokeInterchain(srcChainMethod, BigInteger.valueOf(index), destAddr, category == IBTP.Category.REQUEST
-                , bizCallData, BigInteger.ZERO, 10000000L, nonce, validUntilBlock, version, chainId, "");
+        List<byte[]> args = new ArrayList<>();
+        List<byte[]> multiSigs = new ArrayList<>();
+        request.getContent().getArgsList().forEach(arg -> args.add(arg.toByteArray()));
+        request.getBxhProof().getMultiSignList().forEach(arg -> multiSigs.add(arg.toByteArray()));
+        RemoteCall<TransactionReceipt> transactionReceiptRemoteCall = broker.invokeInterchain(
+                request.getFrom(),
+                request.getServiceId(),
+                BigInteger.valueOf(request.getIndex()),
+                BigInteger.valueOf(request.getType().getNumber()),
+                request.getContent().getFunc(),
+                args,
+                BigInteger.valueOf(request.getBxhProof().getTxStatusValue()),
+                multiSigs,
+                request.getIsEncrypted(),
+                BigInteger.ZERO, 10000000L, nonce, validUntilBlock, version, chainId, "");
         Future<TransactionReceipt> transactionReceiptFuture = transactionReceiptRemoteCall.sendAsync();
         TransactionReceipt transactionReceipt = transactionReceiptFuture.get();
         log.info("tx hash:{}", transactionReceipt.getTransactionHash());
         return transactionReceipt;
     }
 
-    public TransactionReceipt invokeInterchainWithError(String from, Long index, Boolean status) throws Exception {
+    public TransactionReceipt invokeReceiptInterchain(SubmitReceiptRequest request) throws Exception {
         long currentHeight = client.appBlockNumber()
                 .send().getBlockNumber().longValue();
         long validUntilBlock = currentHeight + 80;
         String nonce = CITAUtils.getNonce();
-        RemoteCall<TransactionReceipt> transactionReceiptRemoteCall = broker.invokeIndexUpdateWithError(from, BigInteger.valueOf(index),
-                status, "", 10000000L, nonce, validUntilBlock, version, chainId, "");
+        List<byte[]> args = new ArrayList<>();
+        request.getResult().getDataList().forEach(arg -> args.add(arg.toByteArray()));
+        List<byte[]> multiSigs = new ArrayList<>();
+        request.getBxhProof().getMultiSignList().forEach(arg -> multiSigs.add(arg.toByteArray()));
+        RemoteCall<TransactionReceipt> transactionReceiptRemoteCall = broker.invokeReceipt(
+                request.getServiceId(),
+                request.getTo(),
+                BigInteger.valueOf(request.getIndex()),
+                BigInteger.valueOf(request.getType().getNumber()),
+                args,
+                BigInteger.valueOf(request.getBxhProof().getTxStatusValue()),
+                multiSigs,
+                BigInteger.ZERO, 10000000L, nonce, validUntilBlock, version, chainId, "");
         Future<TransactionReceipt> transactionReceiptFuture = transactionReceiptRemoteCall.sendAsync();
         TransactionReceipt transactionReceipt = transactionReceiptFuture.get();
         log.info("tx hash:{}", transactionReceipt.getTransactionHash());
         return transactionReceipt;
     }
 
-
-    public IBTP generateCallBack(IBTP origin, byte[][] args, boolean status) throws InvalidProtocolBufferException {
-        payload payload = pb.payload.parseFrom(origin.getPayload());
-        content content = pb.content.parseFrom(payload.getContent());
-
-        IBTP.Type typ = IBTP.Type.RECEIPT_SUCCESS;
-        pb.content newContent = pb.content.newBuilder()
-                .setSrcContractId(content.getDstContractId())
-                .setDstContractId(content.getSrcContractId())
-                .build();
-        if (status) {
-            pb.content.Builder builder = newContent.toBuilder().setFunc(content.getCallback());
-            for (ByteString argCb : content.getArgsCbList()) {
-                builder = builder.addArgs(argCb);
-            }
-            for (byte[] arg : args) {
-                builder = builder.addArgs(ByteString.copyFrom(arg));
-
-            }
-            newContent = builder.build();
-        } else {
-            typ = IBTP.Type.RECEIPT_FAILURE;
-            pb.content.Builder builder = newContent.toBuilder().setFunc(content.getRollback());
-            for (ByteString argRb : content.getArgsRbList()) {
-                builder = builder.addArgs(argRb);
-            }
-            newContent = builder.build();
-        }
-        pb.payload newPayload = pb.payload.newBuilder().setContent(newContent.toByteString()).build();
-        return IBTP.newBuilder().setFrom(origin.getFrom())
-                .setTo(origin.getTo())
-                .setIndex(origin.getIndex())
-                .setType(typ)
-                .setTimestamp(System.currentTimeMillis())
-                .setProof(origin.getProof())
-                .setPayload(newPayload.toByteString())
-                .setVersion(origin.getVersion())
-                .build();
-    }
 
 }

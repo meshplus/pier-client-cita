@@ -3,6 +3,7 @@ package com.dmlab.cita.server;
 import com.dmlab.cita.server.service.AppchainPluginServiceImpl;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.io.IOException;
@@ -13,10 +14,12 @@ public class ServerApplication {
     private Server server;
     private static final int protoVersion = 4;
 
+    @Value("${grpc.server.port}")
+    private int port;
+
 
     private void start() throws IOException {
         /* The port on which the server should run */
-        int port = 50052;
         server = ServerBuilder.forPort(port)
                 .addService(new AppchainPluginServiceImpl())
                 .build()
